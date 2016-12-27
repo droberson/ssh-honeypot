@@ -71,7 +71,7 @@ int log_ssh_attempt (ssh_message message, ssh_session session) {
 }
 
 
-int handle_auth (ssh_session session) {
+int handle_ssh_auth (ssh_session session) {
   ssh_message message;
 
   if (ssh_handle_key_exchange (session)) {
@@ -79,7 +79,7 @@ int handle_auth (ssh_session session) {
     return -1;
   }
 
-  while (1) {
+  for (;;) {
     if ((message = ssh_message_get (session)) == NULL)
       break;
 
@@ -112,7 +112,7 @@ int main (int argc, char *argv[]) {
       port = atoi(optarg);
       break;
 
-    case 'd': //daemonize
+    case 'd': /* daemonize */
       break;
 
     case 'l': /* log file path */
@@ -127,7 +127,7 @@ int main (int argc, char *argv[]) {
       rsakey = optarg;
       break;
 
-    case 'f': //pid file location
+    case 'f': /* pid file location */
       break;
       
     case 's': /* Output to stdout */
@@ -139,8 +139,8 @@ int main (int argc, char *argv[]) {
     }
   }
 
-  session = ssh_new();
-  sshbind = ssh_bind_new();
+  session = ssh_new ();
+  sshbind = ssh_bind_new ();
 
   ssh_bind_options_set (sshbind, SSH_BIND_OPTIONS_BINDADDR, bindaddr);
   ssh_bind_options_set (sshbind, SSH_BIND_OPTIONS_BINDPORT, &port);
@@ -153,7 +153,7 @@ int main (int argc, char *argv[]) {
   }
 
 
-  while (1) {
+  for (;;) {
     if (ssh_bind_accept (sshbind, session) == SSH_ERROR) {
       fprintf (stderr, "ssh_bind_accept(): %s\n", ssh_get_error (sshbind));
       return EXIT_FAILURE;
@@ -164,7 +164,7 @@ int main (int argc, char *argv[]) {
       fprintf (stderr, "fork(): %s\n", strerror (errno));
       return EXIT_FAILURE;
     case 0:
-      exit (handle_auth (session));
+      exit (handle_ssh_auth (session));
     default:
       break;
     }
