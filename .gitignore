@@ -1,0 +1,4 @@
+ssh-honeypot.log
+ssh-honeypot.rsa
+ssh-honeypot.rsa.pub
+bin/ssh-honeypot
