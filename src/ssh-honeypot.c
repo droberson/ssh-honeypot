@@ -3,6 +3,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdarg.h>
 #include <unistd.h>
 #include <errno.h>
 #include <string.h>
@@ -22,6 +23,9 @@ char *rsakey = RSAKEY;
 char *bindaddr = BINDADDR;
 int console_output = 0;
 
+
+/* usage() -- prints out usage instructions and exits the program
+ */
 void usage (const char *progname) {
   fprintf (stderr, "ssh-honeypot %s by %s\n\n", VERSION, AUTHOR);
   fprintf (stderr, "usage: %s [-?h -p <port> -l <file> -b <address> -r <file> -f <file>]\n", progname);
@@ -35,47 +39,75 @@ void usage (const char *progname) {
 }
 
 
-int log_ssh_attempt (ssh_message message, ssh_session session) {
-  FILE *f;
-  int n;
+/* log_entry() -- adds timestamped log entry
+ *             -- displays output to stdout if console_output is true
+ *             -- returns 0 on success, 1 on failure
+ */
+int log_entry (const char *fmt, ...) {
+  FILE *fp;
   time_t t;
+  va_list va;
   char *timestr;
+  char buf[1024];
+
+
+  time (&t);
+  timestr = strtok (ctime (&t), "\n"); // banish newline character to the land
+                                       // of wind and ghosts
+  if ((fp = fopen (logfile, "a+")) == NULL) {
+    fprintf (stderr, "Unable to open logfile %s: %s\n",
+	     logfile,
+	     strerror (errno));
+    return 1;
+  }
+
+  va_start (va, fmt);
+  vsprintf (buf, fmt, va);
+  va_end (va);
+
+
+  fprintf (fp, "[%s] %s\n", timestr, buf);
+
+  if (console_output)
+    printf ("[%s] %s\n", timestr, buf);
+  
+  fclose (fp);
+  return 0;
+}
+
+
+/* log_ssh_attempt() -- logs ip, user, and pass to logfile
+ */
+int log_ssh_attempt (ssh_message message, ssh_session session) {
+  int n;
   char ip[INET6_ADDRSTRLEN];
   struct sockaddr_storage tmp;
   struct sockaddr_in *sock;
   socklen_t address_len = sizeof(tmp);
 
+
   getpeername (ssh_get_fd (session), (struct sockaddr *)&tmp, &address_len);
   sock = (struct sockaddr_in *)&tmp;
   inet_ntop (AF_INET, &sock->sin_addr, ip, sizeof(ip));
   
-  time (&t);
-  timestr = strtok (ctime(&t), "\n"); /* disrespect the newline character */
+  n = log_entry ("%s %s %s",
+		 ip,
+		 ssh_message_auth_user (message),
+		 ssh_message_auth_password (message));
 
-  if ((f = fopen (logfile, "a+")) == NULL) {
-    fprintf (stderr, "Unable to open logfile %s: %s\n",
-	    logfile,
-	    strerror (errno));
-
-    return -1;
-  }
-
-  n = fprintf (f, "[%s] %s %s %s\n",
-	      timestr,
-	      ip,
-	      ssh_message_auth_user(message),
-	      ssh_message_auth_password(message));
-  fclose(f);
-  
   return n;
 }
 
 
+/* handle_ssh_auth() -- handles ssh authentication requests, logging
+ *                   -- appropriately.
+ */
 int handle_ssh_auth (ssh_session session) {
   ssh_message message;
 
+  
   if (ssh_handle_key_exchange (session)) {
-    fprintf(stderr, "Error exchanging keys: %s\n", ssh_get_error(session));
+    log_entry ("Error exchanging keys: %s", ssh_get_error (session));
     return -1;
   }
 
@@ -94,6 +126,8 @@ int handle_ssh_auth (ssh_session session) {
 }
 
 
+/* main() -- main entry point of program
+ */
 int main (int argc, char *argv[]) {
   char opt;
   unsigned short port = PORT;
@@ -148,20 +182,20 @@ int main (int argc, char *argv[]) {
   ssh_bind_options_set (sshbind, SSH_BIND_OPTIONS_RSAKEY, rsakey);
 
   if (ssh_bind_listen (sshbind) < 0) {
-    fprintf (stderr, "ssh_bind_listen(): %s\n", ssh_get_error (sshbind));
+    fprintf (stderr, "ssh_bind_listen(): %s", ssh_get_error (sshbind));
     return EXIT_FAILURE;
   }
 
 
   for (;;) {
     if (ssh_bind_accept (sshbind, session) == SSH_ERROR) {
-      fprintf (stderr, "ssh_bind_accept(): %s\n", ssh_get_error (sshbind));
+      log_entry ("ssh_bind_accept(): %s", ssh_get_error (sshbind));
       return EXIT_FAILURE;
     }
 
     switch (fork()) {
     case -1:
-      fprintf (stderr, "fork(): %s\n", strerror (errno));
+      log_entry ("fork(): %s", strerror (errno));
       return EXIT_FAILURE;
     case 0:
       exit (handle_ssh_auth (session));
