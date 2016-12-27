@@ -34,6 +34,7 @@ void usage (const char *progname) {
   fprintf (stderr, "\t-b <address>\t-- IP address to bind to\n");
   fprintf (stderr, "\t-r <file>\t-- specify RSA key to use\n");
   fprintf (stderr, "\t-f <file>\t-- specify location to PID file\n");
+  fprintf (stderr, "\t-s\t\t-- print output to stdout\n");
 
   exit (EXIT_FAILURE);
 }
@@ -182,7 +183,7 @@ int main (int argc, char *argv[]) {
   ssh_bind_options_set (sshbind, SSH_BIND_OPTIONS_RSAKEY, rsakey);
 
   if (ssh_bind_listen (sshbind) < 0) {
-    fprintf (stderr, "ssh_bind_listen(): %s", ssh_get_error (sshbind));
+    log_entry ("ssh_bind_listen(): %s", ssh_get_error (sshbind));
     return EXIT_FAILURE;
   }
 
