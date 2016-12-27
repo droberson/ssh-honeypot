@@ -1,4 +1,2 @@
-ssh-honeypot.log
-ssh-honeypot.rsa
-ssh-honeypot.rsa.pub
-bin/ssh-honeypot
+# Ignore RSA keys and log files
+ssh-honeypot.*
