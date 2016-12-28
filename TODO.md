@@ -1,5 +1,3 @@
-- daemonize
-- pid files
 - log ip addresses in broken authentication attempts
 - log parsing scripts
 -- geolocation
