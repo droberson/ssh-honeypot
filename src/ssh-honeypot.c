@@ -18,11 +18,12 @@
 
 
 char *logfile = LOGFILE;
+char *pidfile = PIDFILE;
 char *banner = BANNER;
 char *rsakey = RSAKEY;
 char *bindaddr = BINDADDR;
-int console_output = 0;
-
+int console_output = 1;
+int daemonize = 0;
 
 /* usage() -- prints out usage instructions and exits the program
  */
@@ -30,11 +31,11 @@ void usage (const char *progname) {
   fprintf (stderr, "ssh-honeypot %s by %s\n\n", VERSION, AUTHOR);
   fprintf (stderr, "usage: %s [-?h -p <port> -l <file> -b <address> -r <file> -f <file>]\n", progname);
   fprintf (stderr, "\t-?/-h\t\t-- this help menu\n");
-  fprintf (stderr, "\t-l <file>\t-- log file\n");
+  fprintf (stderr, "\t-p <port>\t-- listen port\n");
   fprintf (stderr, "\t-b <address>\t-- IP address to bind to\n");
+  fprintf (stderr, "\t-l <file>\t-- log file\n");
   fprintf (stderr, "\t-r <file>\t-- specify RSA key to use\n");
   fprintf (stderr, "\t-f <file>\t-- specify location to PID file\n");
-  fprintf (stderr, "\t-s\t\t-- print output to stdout\n");
 
   exit (EXIT_FAILURE);
 }
@@ -45,6 +46,7 @@ void usage (const char *progname) {
  *             -- returns 0 on success, 1 on failure
  */
 int log_entry (const char *fmt, ...) {
+  int n;
   FILE *fp;
   time_t t;
   va_list va;
@@ -67,13 +69,13 @@ int log_entry (const char *fmt, ...) {
   va_end (va);
 
 
-  fprintf (fp, "[%s] %s\n", timestr, buf);
+  n = fprintf (fp, "[%s] %s\n", timestr, buf);
 
   if (console_output)
     printf ("[%s] %s\n", timestr, buf);
   
   fclose (fp);
-  return 0;
+  return n;
 }
 
 
@@ -127,16 +129,38 @@ int handle_ssh_auth (ssh_session session) {
 }
 
 
+/* write_pid_file() -- writes PID to PIDFILE
+ */
+void write_pid_file (char *path, pid_t pid) {
+  FILE *fp;
+
+  printf("path %s\n", path);
+  fp = fopen (path, "w");
+
+  if (fp == NULL) {
+    log_entry ("FATAL: Unable to open PID file %s: %s\n",
+	       path,
+	       strerror (errno));
+    
+    exit (EXIT_FAILURE);
+  }
+
+  fprintf (fp, "%d", pid);
+  fclose (fp);
+}
+
+
 /* main() -- main entry point of program
  */
 int main (int argc, char *argv[]) {
+  pid_t pid, child;
   char opt;
   unsigned short port = PORT;
   ssh_session session;
   ssh_bind sshbind;
 
   
-  while ((opt = getopt (argc, argv, "h?p:dl:b:r:f:s")) != -1) {
+  while ((opt = getopt (argc, argv, "h?p:dl:b:r:f:")) != -1) {
     switch (opt) {
     case '?': /* print usage */
     case 'h': 
@@ -148,6 +172,8 @@ int main (int argc, char *argv[]) {
       break;
 
     case 'd': /* daemonize */
+      daemonize = 1;
+      console_output = 0;
       break;
 
     case 'l': /* log file path */
@@ -163,16 +189,37 @@ int main (int argc, char *argv[]) {
       break;
 
     case 'f': /* pid file location */
-      break;
-      
-    case 's': /* Output to stdout */
-      console_output = 1;
+      pidfile = optarg;
       break;
 
     default:
       usage (argv[0]);
     }
   }
+
+  if (daemonize == 1) {
+    pid = fork();
+    
+    if (pid < 0) {
+      log_entry ("FATAL: fork(): %s\n", strerror (errno));
+      exit (EXIT_FAILURE);
+    }
+
+    else if (pid > 0) {
+      write_pid_file (pidfile, pid);
+      exit (EXIT_SUCCESS);
+    }
+
+    printf ("ssh-honeypot %s by %s started. PID %d\n",
+	    VERSION,
+	    AUTHOR,
+	    getpid());
+  }
+
+  log_entry ("ssh-honeypot %s by %s started. PID %d",
+	     VERSION,
+	     AUTHOR,
+	     getpid());
 
   session = ssh_new ();
   sshbind = ssh_bind_new ();
@@ -183,25 +230,29 @@ int main (int argc, char *argv[]) {
   ssh_bind_options_set (sshbind, SSH_BIND_OPTIONS_RSAKEY, rsakey);
 
   if (ssh_bind_listen (sshbind) < 0) {
-    log_entry ("ssh_bind_listen(): %s", ssh_get_error (sshbind));
-    return EXIT_FAILURE;
-  }
+    log_entry ("FATAL: ssh_bind_listen(): %s", ssh_get_error (sshbind));
 
+    if (daemonize == 1)
+      printf ("FATAL: ssh_bind_listen(): %s\n", ssh_get_error (sshbind));
+    
+    exit (EXIT_FAILURE);
+  }
 
   for (;;) {
     if (ssh_bind_accept (sshbind, session) == SSH_ERROR) {
-      log_entry ("ssh_bind_accept(): %s", ssh_get_error (sshbind));
-      return EXIT_FAILURE;
+      log_entry ("FATAL: ssh_bind_accept(): %s", ssh_get_error (sshbind));
+      exit (EXIT_FAILURE);
     }
 
-    switch (fork()) {
-    case -1:
-      log_entry ("fork(): %s", strerror (errno));
-      return EXIT_FAILURE;
-    case 0:
+    child = fork();
+
+    if (child < 0) {
+      log_entry ("FATAL: fork(): %s", strerror (errno));
+      exit (EXIT_FAILURE);
+    }
+
+    if (child == 0) {
       exit (handle_ssh_auth (session));
-    default:
-      break;
     }
   }
   
