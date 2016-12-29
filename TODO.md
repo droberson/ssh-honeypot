@@ -1,7 +1,6 @@
-- log ip addresses in broken authentication attempts
+- gather more SSH banners and add ability to select
 - log parsing scripts
 -- geolocation
 -- graphs/statistics
 - canaries
-- gather more SSH banners and add ability to select
 - Fail2Ban?
