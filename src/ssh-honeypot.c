@@ -211,15 +211,17 @@ int main (int argc, char *argv[]) {
       exit (EXIT_SUCCESS);
     }
 
-    printf ("ssh-honeypot %s by %s started. PID %d\n",
+    printf ("ssh-honeypot %s by %s started on port %d. PID %d\n",
 	    VERSION,
 	    AUTHOR,
+	    port,
 	    getpid());
   }
 
-  log_entry ("ssh-honeypot %s by %s started. PID %d",
+  log_entry ("ssh-honeypot %s by %s started on port %d. PID %d",
 	     VERSION,
 	     AUTHOR,
+	     port,
 	     getpid());
 
   session = ssh_new ();
