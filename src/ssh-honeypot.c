@@ -79,26 +79,20 @@ int log_entry (const char *fmt, ...) {
 }
 
 
-/* log_ssh_attempt() -- logs ip, user, and pass to logfile
+/* get_ssh_ip() -- obtains IP address via ssh_session
  */
-int log_ssh_attempt (ssh_message message, ssh_session session) {
-  int n;
-  char ip[INET6_ADDRSTRLEN];
+char *get_ssh_ip(ssh_session session) {
+  static char ip[INET6_ADDRSTRLEN];
   struct sockaddr_storage tmp;
-  struct sockaddr_in *sock;
+  struct sockaddr_in *s;
   socklen_t address_len = sizeof(tmp);
 
-
-  getpeername (ssh_get_fd (session), (struct sockaddr *)&tmp, &address_len);
-  sock = (struct sockaddr_in *)&tmp;
-  inet_ntop (AF_INET, &sock->sin_addr, ip, sizeof(ip));
   
-  n = log_entry ("%s %s %s",
-		 ip,
-		 ssh_message_auth_user (message),
-		 ssh_message_auth_password (message));
+  getpeername (ssh_get_fd (session), (struct sockaddr *)&tmp, &address_len);
+  s = (struct sockaddr_in *)&tmp;
+  inet_ntop (AF_INET, &s->sin_addr, ip, sizeof(ip));
 
-  return n;
+  return ip;
 }
 
 
@@ -107,10 +101,13 @@ int log_ssh_attempt (ssh_message message, ssh_session session) {
  */
 int handle_ssh_auth (ssh_session session) {
   ssh_message message;
+  char *ip;
 
+
+  ip = get_ssh_ip (session);
   
   if (ssh_handle_key_exchange (session)) {
-    log_entry ("Error exchanging keys: %s", ssh_get_error (session));
+    log_entry ("%s Error exchanging keys: %s", ip, ssh_get_error (session));
     return -1;
   }
 
@@ -118,8 +115,12 @@ int handle_ssh_auth (ssh_session session) {
     if ((message = ssh_message_get (session)) == NULL)
       break;
 
-    if (ssh_message_subtype (message) == SSH_AUTH_METHOD_PASSWORD)
-      log_ssh_attempt (message, session);
+    if (ssh_message_subtype (message) == SSH_AUTH_METHOD_PASSWORD) {
+      log_entry ("%s %s %s",
+		 ip,
+		 ssh_message_auth_user (message),
+		 ssh_message_auth_password (message));
+    }
 
     ssh_message_reply_default (message);
     ssh_message_free (message);
