@@ -1,4 +1,4 @@
-#define VERSION  "0.0.2"
+#define VERSION  "0.0.3"
 #define AUTHOR   "Daniel Roberson"
 
 #define LOGFILE  "ssh-honeypot.log"              /* default log location */
