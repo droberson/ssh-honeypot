@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <string.h>
+#include <signal.h>
 #include <time.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
@@ -199,6 +200,7 @@ int main (int argc, char *argv[]) {
   }
 
   if (daemonize == 1) {
+    signal (SIGCHLD, SIG_IGN);
     pid = fork();
     
     if (pid < 0) {
