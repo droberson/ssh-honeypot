@@ -1,4 +1,4 @@
-/* ssh-honeypot -- by Daniel Roberson (daniel(a)planethacker.net) 2016
+/* ssh-honeypot -- by Daniel Roberson (daniel(a)planethacker.net) 2016-2017
  */
 
 #include <stdio.h>
@@ -9,6 +9,7 @@
 #include <string.h>
 #include <signal.h>
 #include <time.h>
+#include <syslog.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 
@@ -25,6 +26,8 @@ char *rsakey = RSAKEY;
 char *bindaddr = BINDADDR;
 int console_output = 1;
 int daemonize = 0;
+int use_syslog = 0;
+
 
 /* usage() -- prints out usage instructions and exits the program
  */
@@ -35,6 +38,8 @@ void usage (const char *progname) {
   fprintf (stderr, "\t-p <port>\t-- listen port\n");
   fprintf (stderr, "\t-b <address>\t-- IP address to bind to\n");
   fprintf (stderr, "\t-l <file>\t-- log file\n");
+  fprintf (stderr, "\t-s\t\t-- toggle syslog usage. Default: %s\n",
+	   use_syslog ? "on" : "off");
   fprintf (stderr, "\t-r <file>\t-- specify RSA key to use\n");
   fprintf (stderr, "\t-f <file>\t-- specify location to PID file\n");
 
@@ -69,6 +74,8 @@ int log_entry (const char *fmt, ...) {
   vsprintf (buf, fmt, va);
   va_end (va);
 
+  if (use_syslog)
+    syslog (LOG_INFO | LOG_AUTHPRIV, "[%s] %s", timestr, buf);
 
   n = fprintf (fp, "[%s] %s\n", timestr, buf);
 
@@ -162,7 +169,7 @@ int main (int argc, char *argv[]) {
   ssh_bind sshbind;
 
   
-  while ((opt = getopt (argc, argv, "h?p:dl:b:r:f:")) != -1) {
+  while ((opt = getopt (argc, argv, "h?p:dl:b:r:f:s")) != -1) {
     switch (opt) {
     case '?': /* print usage */
     case 'h': 
@@ -192,6 +199,10 @@ int main (int argc, char *argv[]) {
 
     case 'f': /* pid file location */
       pidfile = optarg;
+      break;
+
+    case 's': /* toggle syslog */
+      use_syslog = !use_syslog ? 1 : 0;
       break;
 
     default:

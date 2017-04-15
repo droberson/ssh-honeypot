@@ -11,3 +11,14 @@ rudimentary intelligence on brute force attacks.
 - make
 - bin/ssh-honeypot -r ssh-honeypot.rsa
 
+## Syslog facilities.
+
+As of version 0.0.5, this supports logging to syslog. This feature
+is toggled with the -s flag. It is up to you to configure your
+syslog facilities appropriately. This logs to LOG_AUTHPRIV which is
+typically /var/log/auth.log. You may want to modify this to use
+one of the LOG_LOCAL facilities if you are worried about password
+leakage.
+
+This was implemented to aggregate the data from several hosts into
+a centralized spot.
