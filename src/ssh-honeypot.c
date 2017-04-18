@@ -22,9 +22,10 @@ static struct banner_info_s {
   const char *str, *info;
 } banners[] = {
   {"",  "No banner"},
-  {"OpenSSH_7.2p2 Ubuntu-4ubuntu2.1",  "fake Ubuntu 16.04"},
-  {"OpenSSH_6.6.1",                    "openSUSE 42.1"},
-  {"OpenSSH_6.7p1 Debian-5+deb8u3",    "Debian 8.6"}
+  {"OpenSSH_5.9p1 Debian-5ubuntu1.4", "Ubuntu 12.04"},
+  {"OpenSSH_7.2p2 Ubuntu-4ubuntu2.1", "Ubuntu 16.04"},
+  {"OpenSSH_6.6.1",                   "openSUSE 42.1"},
+  {"OpenSSH_6.7p1 Debian-5+deb8u3",   "Debian 8.6"}
 };
 
 const size_t num_banners = sizeof banners / sizeof *banners;
@@ -62,17 +63,18 @@ static void usage (const char *progname) {
 
 /* pr_banners() -- prints out a list of available banner options
  */
-
-static void pr_banners() {
+static void pr_banners () {
   size_t i;
 
-  fprintf(stderr, "Available banners: [index] banner (description)\n");
+
+  fprintf (stderr, "Available banners: [index] banner (description)\n");
+
   for (i = 0; i < num_banners; i++) {
     struct banner_info_s *banner = banners + i;
-    fprintf(stderr, "[%zu] %s (%s)\n", i, banner->str, banner->info);
+    fprintf (stderr, "[%zu] %s (%s)\n", i, banner->str, banner->info);
   }
 
-  fprintf(stderr, "Total banners: %zu\n", num_banners);
+  fprintf (stderr, "Total banners: %zu\n", num_banners);
 }
 
 
@@ -118,7 +120,7 @@ static int log_entry (const char *fmt, ...) {
 
 /* get_ssh_ip() -- obtains IP address via ssh_session
  */
-static char *get_ssh_ip(ssh_session session) {
+static char *get_ssh_ip (ssh_session session) {
   static char ip[INET6_ADDRSTRLEN];
   struct sockaddr_storage tmp;
   struct sockaddr_in *s;
@@ -230,22 +232,20 @@ int main (int argc, char *argv[]) {
       use_syslog = !use_syslog ? 1 : 0;
       break;
 
-
     case 'i':
       banner_index = atoi(optarg);
+
       if (banner_index >= num_banners) {
-          fprintf(stderr, "FATAL: Invalid banner index\n");
-          exit(EXIT_FAILURE);
+          fprintf (stderr, "FATAL: Invalid banner index\n");
+          exit (EXIT_FAILURE);
       }
 
       banner = banners[banner_index].str;
       break;
 
-
     case 'b':
       banner = optarg;
       break;
-
 
     case '?': /* print usage */
     case 'h':
@@ -253,6 +253,7 @@ int main (int argc, char *argv[]) {
         pr_banners();
         return EXIT_FAILURE;
       }
+
     default:
       usage (argv[0]);
     }
@@ -278,8 +279,6 @@ int main (int argc, char *argv[]) {
 	    port,
 	    getpid());
   }
-
-  printf("running\n");
 
   log_entry ("ssh-honeypot %s by %s started on port %d. PID %d",
 	     VERSION,
