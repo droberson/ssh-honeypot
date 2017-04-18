@@ -1,4 +1,2 @@
 # Ignore RSA keys and log files
-bin/
-temp/
 ssh-honeypot.*
