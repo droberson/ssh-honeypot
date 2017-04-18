@@ -57,4 +57,4 @@ Set banner string
 
 Set banner by index
 
-    $ bib/ssh-honeypot -i <banner index>
+    $ bin/ssh-honeypot -i <banner index>
