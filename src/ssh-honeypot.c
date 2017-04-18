@@ -259,8 +259,9 @@ int main (int argc, char *argv[]) {
     }
   }
 
+  signal (SIGCHLD, SIG_IGN);
+
   if (daemonize == 1) {
-    signal (SIGCHLD, SIG_IGN);
     pid = fork();
 
     if (pid < 0) {
