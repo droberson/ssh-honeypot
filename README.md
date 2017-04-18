@@ -7,28 +7,28 @@ rudimentary intelligence on brute force attacks.
 ## Quickstart
 
 ### Linux
+
 Make sure libssh is installed
 
     $ apt install libssh-dev
 
 ### OSX
-Make sure that xcode is up to date. Then,
 
+Make sure that xcode is up to date.
 
 Install libssh
 
     $ brew install libssh
 
-Copy the osx makefile over Makefile
+Specify MakefileOSX with make:
 
-    $ mv MakefileOSX Makefile
+    $ make -f MakefileOSX
 
 ## Build and Run
 
     $ make
     $ ssh-keygen -t rsa -f ./ssh-honeypot.rsa
     $ bin/ssh-honeypot -r ./ssh-honeypot.rsa
-
 
 ## Usage
 
@@ -46,7 +46,8 @@ leakage.
 This was implemented to aggregate the data from several hosts into
 a centralized spot.
 
-## Banners
+## Changing the Banner
+
 List available banners
 
     $ bin/ssh-honeypot -b
@@ -58,3 +59,4 @@ Set banner string
 Set banner by index
 
     $ bin/ssh-honeypot -i <banner index>
+
