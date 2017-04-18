@@ -32,7 +32,7 @@ Copy the osx makefile over Makefile
 
 ## Usage
 
-    $ bin/ssh-keygen -h
+    $ bin/ssh-honeypot -h
 
 ## Syslog facilities.
 
@@ -49,12 +49,12 @@ a centralized spot.
 ## Banners
 List available banners
 
-    $ bin/ssh-keygen -b
+    $ bin/ssh-honeypot -b
 
 Set banner string
 
-    $ bin/ssh-keygen -b "mybanner string"
+    $ bin/ssh-honeypot -b "my banner string"
 
 Set banner by index
 
-    $ bib/ssh-keygen -i <banner index>
+    $ bib/ssh-honeypot -i <banner index>
