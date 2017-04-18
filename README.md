@@ -27,7 +27,7 @@ Copy the osx makefile over Makefile
 
     $ make
     $ ssh-keygen -t rsa -f ./ssh-honeypot.rsa
-    $ bin/ssh-honeypot -r ./ssh-honepot.rsa
+    $ bin/ssh-honeypot -r ./ssh-honeypot.rsa
 
 
 ## Usage
