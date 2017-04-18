@@ -1,0 +1,10 @@
+CC=clang
+CFLAGS=-DLIBSSH_STATIC
+INC=-I/usr/local/opt/libssh/include
+LIBS=-L/usr/local/opt/libssh/lib -lssh
+
+ssh-honeypot:
+	$(CC) $(CFLAGS) -o bin/ssh-honeypot src/ssh-honeypot.c $(INC) $(LIBS)
+
+clean:
+	rm -f *~ src/*~ bin/ssh-honeypot src/*.o
