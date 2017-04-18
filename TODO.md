@@ -1,4 +1,4 @@
-- gather more SSH banners and add ability to select
+- gather more SSH banners
 - log parsing scripts
 -- geolocation
 -- graphs/statistics
