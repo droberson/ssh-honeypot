@@ -4,12 +4,35 @@ This program listens for incoming ssh connections and logs the ip
 address, username, and password used. This was written to gather
 rudimentary intelligence on brute force attacks.
 
-## Quick start
-- ensure libssh is installed (apt install libssh-dev)
-- edit src/config.h
-- ssh-keygen -t rsa (save to non-default location!)
-- make
-- bin/ssh-honeypot -r ssh-honeypot.rsa
+## Quickstart
+
+### Linux
+Make sure libssh is installed
+
+    $ apt install libssh-dev
+
+### OSX
+Make sure that xcode is up to date. Then,
+
+
+Install libssh
+
+    $ brew install libssh
+
+Copy the osx makefile over Makefile
+
+    $ mv MakefileOSX Makefile
+
+## Build and Run
+
+    $ make
+    $ ssh-keygen -t rsa -f ./ssh-honeypot.rsa
+    $ bin/ssh-honeypot -r ./ssh-honepot.rsa
+
+
+## Usage
+
+    $ bin/ssh-keygen -h
 
 ## Syslog facilities.
 
@@ -22,3 +45,16 @@ leakage.
 
 This was implemented to aggregate the data from several hosts into
 a centralized spot.
+
+## Banners
+List available banners
+
+    $ bin/ssh-keygen -b
+
+Set banner string
+
+    $ bin/ssh-keygen -b "mybanner string"
+
+Set banner by index
+
+    $ bib/ssh-keygen -i <banner index>
