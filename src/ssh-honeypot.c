@@ -201,7 +201,7 @@ int main (int argc, char *argv[]) {
   ssh_bind sshbind;
 
 
-  while ((opt = getopt (argc, argv, "h?p:dl:b:i:r:f:s")) != -1) {
+  while (((opt = getopt (argc, argv, "h?p:dl:b:i:r:f:s")) != -1) && (opt != 255)) {
     switch (opt) {
     case 'p': /* listen port */
       port = atoi(optarg);
