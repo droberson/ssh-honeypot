@@ -194,14 +194,14 @@ static void write_pid_file (char *path, pid_t pid) {
  */
 int main (int argc, char *argv[]) {
   pid_t pid, child;
-  char opt;
+  int opt;
   unsigned short port = PORT, banner_index = 1;
   const char *banner = banners[1].str;
   ssh_session session;
   ssh_bind sshbind;
 
 
-  while (((opt = getopt (argc, argv, "h?p:dl:b:i:r:f:s")) != -1) && (opt != 255)) {
+  while ((opt = getopt (argc, argv, "h?p:dl:b:i:r:f:s")) != -1) {
     switch (opt) {
     case 'p': /* listen port */
       port = atoi(optarg);
