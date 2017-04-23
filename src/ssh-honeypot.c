@@ -102,7 +102,7 @@ static int log_entry (const char *fmt, ...) {
   }
 
   va_start (va, fmt);
-  vsprintf (buf, fmt, va);
+  vsnprintf (buf, sizeof(buf), fmt, va);
   va_end (va);
 
   if (use_syslog)
