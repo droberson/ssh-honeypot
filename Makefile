@@ -1,5 +1,5 @@
 CC=gcc
-CFLAGS=-static-libgcc
+CFLAGS=-Wall -static-libgcc
 LIBS=-lssh
 
 ssh-honeypot:
