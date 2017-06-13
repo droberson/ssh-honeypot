@@ -174,7 +174,6 @@ static int handle_ssh_auth (ssh_session session) {
 static void write_pid_file (char *path, pid_t pid) {
   FILE *fp;
 
-  printf("path %s\n", path);
   fp = fopen (path, "w");
 
   if (fp == NULL) {
