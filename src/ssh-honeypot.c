@@ -228,7 +228,7 @@ int main (int argc, char *argv[]) {
       break;
 
     case 's': /* toggle syslog */
-      use_syslog = !use_syslog ? 1 : 0;
+      use_syslog = use_syslog ? 0 : 1;
       break;
 
     case 'i':
