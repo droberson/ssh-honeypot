@@ -106,7 +106,7 @@ static int log_entry (const char *fmt, ...) {
   va_end (va);
 
   if (use_syslog)
-    syslog (LOG_INFO | LOG_AUTHPRIV, "[%s] %s", timestr, buf);
+    syslog (LOG_INFO | LOG_AUTHPRIV, "%s", buf);
 
   n = fprintf (fp, "[%s] %s\n", timestr, buf);
 
