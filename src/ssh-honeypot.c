@@ -9,7 +9,10 @@
 #include <string.h>
 #include <signal.h>
 #include <time.h>
+#include <pwd.h>
+#include <grp.h>
 #include <syslog.h>
+#include <sys/types.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 
@@ -19,7 +22,7 @@
 #include "config.h"
 
 static struct banner_info_s {
-  const char *str, *info;
+  const char	*str, *info;
 } banners[] = {
   {"",  "No banner"},
   {"OpenSSH_5.9p1 Debian-5ubuntu1.4", "Ubuntu 12.04"},
@@ -30,13 +33,14 @@ static struct banner_info_s {
 
 const size_t num_banners = sizeof banners / sizeof *banners;
 
-char *logfile = LOGFILE;
-char *pidfile = PIDFILE;
-char *rsakey = RSAKEY;
-char *bindaddr = BINDADDR;
-int console_output = 1;
-int daemonize = 0;
-int use_syslog = 0;
+char *	logfile = LOGFILE;
+char *	pidfile = PIDFILE;
+char *	rsakey = RSAKEY;
+char *	bindaddr = BINDADDR;
+int	console_output = 1;
+int	daemonize = 0;
+int	use_syslog = 0;
+
 
 /* usage() -- prints out usage instructions and exits the program
  */
@@ -44,8 +48,9 @@ static void usage (const char *progname) {
   fprintf (stderr, "ssh-honeypot %s by %s\n\n", VERSION, AUTHOR);
 
   fprintf (stderr, "usage: %s "
-    "[-?h -p <port> -a <address> -b <index> -l <file> -r <file> -f <file>]\n",
-    progname);
+	   "[-?h -p <port> -a <address> -b <index> -l <file> -r <file> "
+	   "-f <file> -u <user>]\n",
+	   progname);
   fprintf (stderr, "\t-?/-h\t\t-- this help menu\n");
   fprintf (stderr, "\t-p <port>\t-- listen port\n");
   fprintf (stderr, "\t-a <address>\t-- IP address to bind to\n");
@@ -57,15 +62,16 @@ static void usage (const char *progname) {
   fprintf (stderr, "\t-b\t\t-- list available banners\n");
   fprintf (stderr, "\t-b <string> \t-- specify banner string (max 255 characters)\n");
   fprintf (stderr, "\t-i <index>\t-- specify banner index\n");
+  fprintf (stderr, "\t-u <user>\t-- user to setuid() to after bind()\n");
 
   exit (EXIT_FAILURE);
 }
 
+
 /* pr_banners() -- prints out a list of available banner options
  */
 static void pr_banners () {
-  size_t i;
-
+  size_t	i;
 
   fprintf (stderr, "Available banners: [index] banner (description)\n");
 
@@ -83,12 +89,12 @@ static void pr_banners () {
  *             -- returns 0 on success, 1 on failure
  */
 static int log_entry (const char *fmt, ...) {
-  int n;
-  FILE *fp;
-  time_t t;
-  va_list va;
-  char *timestr;
-  char buf[1024];
+  int		n;
+  FILE *	fp;
+  time_t	t;
+  va_list	va;
+  char *	timestr;
+  char		buf[1024];
 
 
   time (&t);
@@ -121,10 +127,10 @@ static int log_entry (const char *fmt, ...) {
 /* get_ssh_ip() -- obtains IP address via ssh_session
  */
 static char *get_ssh_ip (ssh_session session) {
-  static char ip[INET6_ADDRSTRLEN];
-  struct sockaddr_storage tmp;
-  struct sockaddr_in *s;
-  socklen_t address_len = sizeof(tmp);
+  static char			ip[INET6_ADDRSTRLEN];
+  struct sockaddr_storage	tmp;
+  struct sockaddr_in *		s;
+  socklen_t			address_len = sizeof(tmp);
 
 
   getpeername (ssh_get_fd (session), (struct sockaddr *)&tmp, &address_len);
@@ -139,8 +145,8 @@ static char *get_ssh_ip (ssh_session session) {
  *                   -- appropriately.
  */
 static int handle_ssh_auth (ssh_session session) {
-  ssh_message message;
-  char *ip;
+  ssh_message	message;
+  char *	ip;
 
 
   ip = get_ssh_ip (session);
@@ -172,7 +178,7 @@ static int handle_ssh_auth (ssh_session session) {
 /* write_pid_file() -- writes PID to PIDFILE
  */
 static void write_pid_file (char *path, pid_t pid) {
-  FILE *fp;
+  FILE *	fp;
 
   fp = fopen (path, "w");
 
@@ -189,18 +195,67 @@ static void write_pid_file (char *path, pid_t pid) {
 }
 
 
+/* drop_privileges() -- drops privileges to specified user/group
+ */
+void drop_privileges (char *username) {
+  struct passwd *	pw;
+  struct group *	grp;
+
+
+  pw = getpwnam (username);
+  if (pw == NULL) {
+    log_entry ("FATAL: Username does not exist: %s\n", username);
+    exit (EXIT_FAILURE);
+  }
+
+  grp = getgrgid (pw->pw_gid);
+  if (grp == NULL) {
+    log_entry ("FATAL: Unable to determine group information for %d: %s\n",
+	       pw->pw_gid,
+	       strerror (errno));
+    exit (EXIT_FAILURE);
+  }
+
+  /* chown logfile so this user can use it */
+  if (chown (logfile, pw->pw_uid, pw->pw_gid) == -1) {
+    log_entry ("FATAL: Unable to set permissions for log file %s: %s\n",
+	       logfile,
+	       strerror (errno));
+    exit (EXIT_FAILURE);
+  }
+
+  /* drop group first */
+  if (setgid (pw->pw_gid) == -1) {
+    log_entry ("FATAL: Unable to drop group permissions to %s: %s\n",
+	       grp->gr_name,
+	       strerror (errno));
+    exit (EXIT_FAILURE);
+  }
+
+  /* drop user privileges */
+  if (setuid (pw->pw_uid) == -1) {
+    log_entry ("FATAL: Unable to drop user permissions to %s: %s\n",
+	       username,
+	       strerror (errno));
+    exit (EXIT_FAILURE);
+  }
+
+}
+
+
 /* main() -- main entry point of program
  */
 int main (int argc, char *argv[]) {
-  pid_t pid, child;
-  int opt;
-  unsigned short port = PORT, banner_index = 1;
-  const char *banner = banners[1].str;
-  ssh_session session;
-  ssh_bind sshbind;
+  pid_t			pid, child;
+  int			opt;
+  unsigned short	port = PORT, banner_index = 1;
+  const char *		banner = banners[1].str;
+  char *		username = NULL;
+  ssh_session		session;
+  ssh_bind		sshbind;
 
 
-  while ((opt = getopt (argc, argv, "h?p:dl:b:i:r:f:s")) != -1) {
+  while ((opt = getopt (argc, argv, "h?p:dl:b:i:r:f:su:")) != -1) {
     switch (opt) {
     case 'p': /* listen port */
       port = atoi(optarg);
@@ -229,6 +284,10 @@ int main (int argc, char *argv[]) {
 
     case 's': /* toggle syslog */
       use_syslog = use_syslog ? 0 : 1;
+      break;
+
+    case 'u': /* user to drop privileges to */
+      username = optarg;
       break;
 
     case 'i':
@@ -302,6 +361,10 @@ int main (int argc, char *argv[]) {
 
     exit (EXIT_FAILURE);
   }
+
+  /* drop privileges */
+  if (username != NULL)
+    drop_privileges (username);
 
   for (;;) {
     if (ssh_bind_accept (sshbind, session) == SSH_ERROR) {
