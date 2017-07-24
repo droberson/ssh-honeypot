@@ -57,7 +57,6 @@ as root:
 	
 Beware that this chowns the logfile to the user specified as well.
 
-
 ## Changing the Banner
 
 List available banners
