@@ -34,7 +34,7 @@ Specify MakefileOSX with make:
 
     $ bin/ssh-honeypot -h
 
-## Syslog facilities.
+## Syslog facilities
 
 As of version 0.0.5, this supports logging to syslog. This feature
 is toggled with the -s flag. It is up to you to configure your
@@ -45,6 +45,18 @@ leakage.
 
 This was implemented to aggregate the data from several hosts into
 a centralized spot.
+
+## Dropping privileges
+
+As of version 0.0.8, you can drop root privileges of this program
+after binding to a privileged port. You can now run this as _nobody_
+on port 22 for example instead of root, but have to initially start it
+as root:
+
+	$ sudo bin/ssh-honeypot -p 22 -u nobody
+	
+Beware that this chowns the logfile to the user specified as well.
+
 
 ## Changing the Banner
 
