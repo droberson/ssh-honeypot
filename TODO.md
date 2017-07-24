@@ -3,6 +3,6 @@
 -- geolocation
 -- graphs/statistics
 - canaries
-- Fail2Ban?
 - autoconf
 - manpage
+- packages for different distros??
