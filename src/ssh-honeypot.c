@@ -290,7 +290,7 @@ int main (int argc, char *argv[]) {
       username = optarg;
       break;
 
-    case 'i':
+    case 'i': /* set banner by index */
       banner_index = atoi(optarg);
 
       if (banner_index >= num_banners) {
@@ -301,7 +301,7 @@ int main (int argc, char *argv[]) {
       banner = banners[banner_index].str;
       break;
 
-    case 'b':
+    case 'b': /* specify banner string */
       banner = optarg;
       break;
 
