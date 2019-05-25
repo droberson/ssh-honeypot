@@ -1,8 +1,3 @@
-- gather more SSH banners
-- log parsing scripts
--- geolocation
--- graphs/statistics
-- canaries
-- autoconf
-- manpage
-- packages for different distros??
+- log hasshes of incoming clients
+- json output
+
