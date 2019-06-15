@@ -1,4 +1,4 @@
-/* ssh-honeypot -- by Daniel Roberson (daniel(a)planethacker.net) 2016-2017
+/* ssh-honeypot -- by Daniel Roberson (daniel(a)planethacker.net) 2016-2019
  */
 
 #include <stdio.h>

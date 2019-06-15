@@ -1,6 +1,6 @@
 The MIT License
 
-Copyright (c) 2016-2017 Daniel Roberson
+Copyright (c) 2016-2019 Daniel Roberson
 
 Permission is hereby granted, free of charge, to any person obtaining
 a copy of this software and associated documentation files (the
