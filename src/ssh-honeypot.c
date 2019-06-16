@@ -17,6 +17,7 @@
 #include <pwd.h>
 #include <grp.h>
 #include <syslog.h>
+#include <sys/param.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
@@ -27,21 +28,6 @@
 #include <json-c/json.h>
 
 #include "config.h"
-
-
-/* banners */
-static struct banner_info_s {
-  const char	*str, *info;
-} banners[] = {
-  {"",  "No banner"},
-  {"OpenSSH_5.9p1 Debian-5ubuntu1.4", "Ubuntu 12.04"},
-  {"OpenSSH_7.2p2 Ubuntu-4ubuntu2.1", "Ubuntu 16.04"},
-  {"OpenSSH_7.6p1 Ubuntu-4ubuntu0.3", "Ubuntu 18.04"),
-  {"OpenSSH_6.6.1",                   "openSUSE 42.1"},
-  {"OpenSSH_6.7p1 Debian-5+deb8u3",   "Debian 8.6"}
-};
-
-const size_t num_banners = sizeof banners / sizeof *banners;
 
 
 /* Globals */
@@ -58,6 +44,24 @@ char *          json_logfile = JSON_LOGFILE;
 char *          json_server = JSON_SERVER;
 unsigned short  json_port = JSON_PORT;
 int             json_sock;
+char            hostname[MAXHOSTNAMELEN];
+
+
+/* Banners */
+static struct banner_info_s {
+  const char	*str, *info;
+} banners[] = {
+  {"",  "No banner"},
+  {"OpenSSH_5.9p1 Debian-5ubuntu1.4", "Ubuntu 12.04"},
+  {"OpenSSH_7.2p2 Ubuntu-4ubuntu2.1", "Ubuntu 16.04"},
+  {"OpenSSH_7.6p1 Ubuntu-4ubuntu0.3", "Ubuntu 18.04"},
+  {"OpenSSH_6.6.1",                   "openSUSE 42.1"},
+  {"OpenSSH_6.7p1 Debian-5+deb8u3",   "Debian 8.6"},
+  {"OpenSSH_7.5",                     "pfSense 2.4.4-RELEASE-p3"},
+  {"dropbear_2014.63",                "dropbear 2014.63"},
+};
+
+const size_t num_banners = sizeof banners / sizeof *banners;
 
 
 /* usage() -- prints out usage instructions and exits the program
@@ -78,7 +82,7 @@ static void usage (const char *progname) {
   fprintf (stderr, "\t-r <file>\t-- specify RSA key to use\n");
   fprintf (stderr, "\t-f <file>\t-- specify location to PID file\n");
   fprintf (stderr, "\t-b\t\t-- list available banners\n");
-  fprintf (stderr, "\t-b <string> \t-- specify banner string (max 255 characters)\n");
+  fprintf (stderr, "\t-b <string>\t-- specify banner string (max 255 characters)\n");
   fprintf (stderr, "\t-i <index>\t-- specify banner index\n");
   fprintf (stderr, "\t-u <user>\t-- user to setuid() to after bind()\n");
   fprintf (stderr, "\t-j <file>\t-- path to JSON logfile\n");
@@ -92,11 +96,9 @@ static void usage (const char *progname) {
 /* pr_banners() -- prints out a list of available banner options
  */
 static void pr_banners () {
-  size_t	i;
-
   fprintf (stderr, "Available banners: [index] banner (description)\n");
 
-  for (i = 0; i < num_banners; i++) {
+  for (size_t i = 0; i < num_banners; i++) {
     struct banner_info_s *banner = banners + i;
     fprintf (stderr, "[%zu] %s (%s)\n", i, banner->str, banner->info);
   }
@@ -118,6 +120,7 @@ static int sockprintf (int s, const char *fmt, ...) {
 
   return send (s, buf, n, 0);
 }
+
 
 /* log_entry() -- adds timestamped log entry
  *             -- displays output to stdout if console_output is true
@@ -161,7 +164,7 @@ static int log_entry (const char *fmt, ...) {
 /* log_entry_fatal() -- log a message, then exit with EXIT_FAILURE
  */
 void log_entry_fatal (const char *fmt, ...) {
-  va_list vl;
+  va_list       vl;
 
   va_start (vl, fmt);
   log_entry (fmt, vl);
@@ -192,16 +195,18 @@ static void json_log (const char *msg) {
  */
 static void json_log_creds (const char *ip, const char *user, const char *pass) {
   char *        message;
-  json_object   *jobj    = json_object_new_object ();
-  json_object   *j_time  = json_object_new_int (time(NULL));
-  json_object   *j_host  = json_object_new_string (ip);
-  json_object   *j_user  = json_object_new_string (user);
-  json_object   *j_pass  = json_object_new_string (pass);
-  json_object   *j_event = json_object_new_string ("ssh-honeypot-auth");
+  json_object   *jobj     = json_object_new_object ();
+  json_object   *j_time   = json_object_new_int (time(NULL));
+  json_object   *j_host   = json_object_new_string (hostname);
+  json_object   *j_client = json_object_new_string (ip);
+  json_object   *j_user   = json_object_new_string (user);
+  json_object   *j_pass   = json_object_new_string (pass);
+  json_object   *j_event  = json_object_new_string ("ssh-honeypot-auth");
 
   json_object_object_add (jobj, "event", j_event);
   json_object_object_add (jobj, "time", j_time);
   json_object_object_add (jobj, "host", j_host);
+  json_object_object_add (jobj, "client", j_client);
   json_object_object_add (jobj, "user", j_user);
   json_object_object_add (jobj, "pass", j_pass);
 
@@ -221,14 +226,16 @@ static void json_log_creds (const char *ip, const char *user, const char *pass) 
  */
 static void json_log_connection (const char *ip) {
   char *        message;
-  json_object   *jobj    = json_object_new_object ();
-  json_object   *j_time  = json_object_new_int (time (NULL));
-  json_object   *j_host  = json_object_new_string (ip);
-  json_object   *j_event = json_object_new_string ("ssh-honetpot-connection");
+  json_object   *jobj     = json_object_new_object ();
+  json_object   *j_time   = json_object_new_int (time (NULL));
+  json_object   *j_host   = json_object_new_string (hostname);
+  json_object   *j_client = json_object_new_string (ip);
+  json_object   *j_event  = json_object_new_string ("ssh-honetpot-connection");
 
   json_object_object_add (jobj, "event", j_event);
   json_object_object_add (jobj, "time", j_time);
   json_object_object_add (jobj, "host", j_host);
+  json_object_object_add (jobj, "client", j_client);
 
   message = (char *)json_object_to_json_string (jobj);
 
@@ -369,16 +376,16 @@ int main (int argc, char *argv[]) {
 
   while ((opt = getopt (argc, argv, "h?p:dl:b:i:r:f:su:j:J:P:")) != -1) {
     switch (opt) {
-    case 'p': /* listen port */
+    case 'p': /* Listen port */
       port = atoi(optarg);
       break;
 
-    case 'd': /* daemonize */
-      daemonize = 1;
-      console_output = 0;
+    case 'd': /* Daemonize */
+      daemonize = true;
+      console_output = false;
       break;
 
-    case 'l': /* log file path */
+    case 'l': /* Log file path */
       logfile = optarg;
       break;
 
@@ -386,23 +393,23 @@ int main (int argc, char *argv[]) {
       bindaddr = optarg;
       break;
 
-    case 'r': /* path to rsa key */
+    case 'r': /* Path to RSA key */
       rsakey = optarg;
       break;
 
-    case 'f': /* pid file location */
+    case 'f': /* PID file location */
       pidfile = optarg;
       break;
 
-    case 's': /* toggle syslog */
-      use_syslog = use_syslog ? 0 : 1;
+    case 's': /* Toggle syslog */
+      use_syslog = use_syslog ? false : true;
       break;
 
-    case 'u': /* user to drop privileges to */
+    case 'u': /* User to drop privileges to */
       username = optarg;
       break;
 
-    case 'i': /* set banner by index */
+    case 'i': /* Set banner by index */
       banner_index = atoi(optarg);
 
       if (banner_index >= num_banners) {
@@ -413,7 +420,7 @@ int main (int argc, char *argv[]) {
       banner = banners[banner_index].str;
       break;
 
-    case 'b': /* specify banner string */
+    case 'b': /* Specify banner string */
       banner = optarg;
       break;
 
@@ -431,7 +438,7 @@ int main (int argc, char *argv[]) {
       json_port = atoi(optarg);
       break;
 
-    case '?': /* print usage */
+    case '?': /* Print usage */
     case 'h':
       if (optopt == 'i' || optopt == 'b') {
         pr_banners();
@@ -443,8 +450,12 @@ int main (int argc, char *argv[]) {
     }
   }
 
+  if (gethostname (hostname, sizeof(hostname)) == -1)
+    log_entry_fatal ("FATAL: gethostname(): %s\n", strerror (errno));
+
   if (json_logging_server) {
     struct sockaddr_in  s_addr;
+
     json_sock = socket (AF_INET, SOCK_DGRAM, 0);
     if (json_sock < 0)
       log_entry_fatal ("FATAL: socket(): %s\n", strerror (errno));
