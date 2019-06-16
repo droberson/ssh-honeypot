@@ -1,6 +1,6 @@
-CC=gcc
+CC=clang
 CFLAGS=-Wall -static-libgcc
-LIBS=-lssh
+LIBS=-lssh -ljson-c
 
 ssh-honeypot:
 	$(CC) $(CFLAGS) -o bin/ssh-honeypot src/ssh-honeypot.c $(LIBS)

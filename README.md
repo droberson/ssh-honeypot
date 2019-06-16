@@ -8,11 +8,13 @@ rudimentary intelligence on brute force attacks.
 
 ### Linux
 
-Make sure libssh is installed
+Make sure libssh and libjson-c are installed
 
-    $ apt install libssh-dev
+    $ apt install libssh-dev libjson-c-dev
 
 ### OSX
+
+_NOTE: Haven't tested json logging on OSX_
 
 Make sure that xcode is up to date.
 

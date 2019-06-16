@@ -1,8 +1,13 @@
 /* ssh-honeypot -- by Daniel Roberson (daniel(a)planethacker.net) 2016-2019
+ *
+ * TODO: keep fp open for log_entry; reload on HUP
+ * TODO: hassh?
+ * TODO: add more banners
  */
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <stdarg.h>
 #include <unistd.h>
 #include <errno.h>
@@ -19,8 +24,12 @@
 #include <libssh/libssh.h>
 #include <libssh/server.h>
 
+#include <json-c/json.h>
+
 #include "config.h"
 
+
+/* banners */
 static struct banner_info_s {
   const char	*str, *info;
 } banners[] = {
@@ -33,13 +42,21 @@ static struct banner_info_s {
 
 const size_t num_banners = sizeof banners / sizeof *banners;
 
-char *	logfile = LOGFILE;
-char *	pidfile = PIDFILE;
-char *	rsakey = RSAKEY;
-char *	bindaddr = BINDADDR;
-int	console_output = 1;
-int	daemonize = 0;
-int	use_syslog = 0;
+
+/* Globals */
+char *          logfile = LOGFILE;
+char *          pidfile = PIDFILE;
+char *          rsakey = RSAKEY;
+char *          bindaddr = BINDADDR;
+bool            console_output = true;
+bool            daemonize = false;
+bool            use_syslog = false;
+bool            json_logging_file = false;
+bool            json_logging_server = false;
+char *          json_logfile = JSON_LOGFILE;
+char *          json_server = JSON_SERVER;
+unsigned short  json_port = JSON_PORT;
+int             json_sock;
 
 
 /* usage() -- prints out usage instructions and exits the program
@@ -63,6 +80,9 @@ static void usage (const char *progname) {
   fprintf (stderr, "\t-b <string> \t-- specify banner string (max 255 characters)\n");
   fprintf (stderr, "\t-i <index>\t-- specify banner index\n");
   fprintf (stderr, "\t-u <user>\t-- user to setuid() to after bind()\n");
+  fprintf (stderr, "\t-j <file>\t-- path to JSON logfile\n");
+  fprintf (stderr, "\t-J <address>\t-- server to send JSON logs\n");
+  fprintf (stderr, "\t-P <port>\t-- port to send JSON logs\n");
 
   exit (EXIT_FAILURE);
 }
@@ -83,6 +103,20 @@ static void pr_banners () {
   fprintf (stderr, "Total banners: %zu\n", num_banners);
 }
 
+
+/* sockprintf() -- send formatted data to a socket
+ */
+static int sockprintf (int s, const char *fmt, ...) {
+  int           n;
+  char          buf[8192] = {0};
+  va_list       vl;
+
+  va_start (vl, fmt);
+  n = vsnprintf (buf, sizeof(buf), fmt, vl);
+  va_end (vl);
+
+  return send (s, buf, n, 0);
+}
 
 /* log_entry() -- adds timestamped log entry
  *             -- displays output to stdout if console_output is true
@@ -124,186 +158,50 @@ static int log_entry (const char *fmt, ...) {
 }
 
 
-/* get_ssh_ip() -- obtains IP address via ssh_session
+/* json_log() -- log JSON formatted data to a file
  */
-static char *get_ssh_ip (ssh_session session) {
-  static char			ip[INET6_ADDRSTRLEN];
-  struct sockaddr_storage	tmp;
-  struct sockaddr_in *		s;
-  socklen_t			address_len = sizeof(tmp);
-
-
-  getpeername (ssh_get_fd (session), (struct sockaddr *)&tmp, &address_len);
-  s = (struct sockaddr_in *)&tmp;
-  inet_ntop (AF_INET, &s->sin_addr, ip, sizeof(ip));
-
-  return ip;
-}
-
-
-/* handle_ssh_auth() -- handles ssh authentication requests, logging
- *                   -- appropriately.
- */
-static int handle_ssh_auth (ssh_session session) {
-  ssh_message	message;
-  char *	ip;
-
-
-  ip = get_ssh_ip (session);
-
-  if (ssh_handle_key_exchange (session)) {
-    log_entry ("%s Error exchanging keys: %s", ip, ssh_get_error (session));
-    return -1;
-  }
-
-  for (;;) {
-    if ((message = ssh_message_get (session)) == NULL)
-      break;
-
-    if (ssh_message_subtype (message) == SSH_AUTH_METHOD_PASSWORD) {
-      log_entry ("%s %s %s",
-		 ip,
-		 ssh_message_auth_user (message),
-		 ssh_message_auth_password (message));
-    }
-
-    ssh_message_reply_default (message);
-    ssh_message_free (message);
-  }
-
-  return 0;
-}
-
-
-/* write_pid_file() -- writes PID to PIDFILE
- */
-static void write_pid_file (char *path, pid_t pid) {
+static void json_log (const char *msg) {
   FILE *	fp;
 
-  fp = fopen (path, "w");
+  fp = fopen (json_logfile, "a");
 
   if (fp == NULL) {
-    log_entry ("FATAL: Unable to open PID file %s: %s\n",
-	       path,
+    log_entry ("FATAL: Unable to open JSON log file %s: %s\n",
+	       json_logfile,
 	       strerror (errno));
 
     exit (EXIT_FAILURE);
   }
 
-  fprintf (fp, "%d", pid);
+  fprintf (fp, "%s\n", msg);
   fclose (fp);
 }
 
 
-/* drop_privileges() -- drops privileges to specified user/group
+/* json_log_creds() -- log username/password in JSON format
  */
-void drop_privileges (char *username) {
-  struct passwd *	pw;
-  struct group *	grp;
+static void json_log_creds (const char *ip, const char *user, const char *pass) {
+  char *        message;
+  json_object   *jobj    = json_object_new_object ();
+  json_object   *j_time  = json_object_new_int (time(NULL));
+  json_object   *j_host  = json_object_new_string (ip);
+  json_object   *j_user  = json_object_new_string (user);
+  json_object   *j_pass  = json_object_new_string (pass);
+  json_object   *j_event = json_object_new_string ("ssh-honeypot-auth");
 
+  json_object_object_add (jobj, "event", j_event);
+  json_object_object_add (jobj, "time", j_time);
+  json_object_object_add (jobj, "host", j_host);
+  json_object_object_add (jobj, "user", j_user);
+  json_object_object_add (jobj, "pass", j_pass);
 
-  pw = getpwnam (username);
-  if (pw == NULL) {
-    log_entry ("FATAL: Username does not exist: %s\n", username);
-    exit (EXIT_FAILURE);
-  }
+  message = (char *)json_object_to_json_string (jobj);
 
-  grp = getgrgid (pw->pw_gid);
-  if (grp == NULL) {
-    log_entry ("FATAL: Unable to determine group information for %d: %s\n",
-	       pw->pw_gid,
-	       strerror (errno));
-    exit (EXIT_FAILURE);
-  }
+  if (json_logging_file)
+    json_log (message);
 
-  /* chown logfile so this user can use it */
-  if (chown (logfile, pw->pw_uid, pw->pw_gid) == -1) {
-    log_entry ("FATAL: Unable to set permissions for log file %s: %s\n",
-	       logfile,
-	       strerror (errno));
-    exit (EXIT_FAILURE);
-  }
-
-  /* drop group first */
-  if (setgid (pw->pw_gid) == -1) {
-    log_entry ("FATAL: Unable to drop group permissions to %s: %s\n",
-	       grp->gr_name,
-	       strerror (errno));
-    exit (EXIT_FAILURE);
-  }
-
-  /* drop user privileges */
-  if (setuid (pw->pw_uid) == -1) {
-    log_entry ("FATAL: Unable to drop user permissions to %s: %s\n",
-	       username,
-	       strerror (errno));
-    exit (EXIT_FAILURE);
-  }
-
-}
-
-
-/* main() -- main entry point of program
- */
-int main (int argc, char *argv[]) {
-  pid_t			pid, child;
-  int			opt;
-  unsigned short	port = PORT, banner_index = 1;
-  const char *		banner = banners[1].str;
-  char *		username = NULL;
-  ssh_session		session;
-  ssh_bind		sshbind;
-
-
-  while ((opt = getopt (argc, argv, "h?p:dl:b:i:r:f:su:")) != -1) {
-    switch (opt) {
-    case 'p': /* listen port */
-      port = atoi(optarg);
-      break;
-
-    case 'd': /* daemonize */
-      daemonize = 1;
-      console_output = 0;
-      break;
-
-    case 'l': /* log file path */
-      logfile = optarg;
-      break;
-
-    case 'a': /* IP to bind to */
-      bindaddr = optarg;
-      break;
-
-    case 'r': /* path to rsa key */
-      rsakey = optarg;
-      break;
-
-    case 'f': /* pid file location */
-      pidfile = optarg;
-      break;
-
-    case 's': /* toggle syslog */
-      use_syslog = use_syslog ? 0 : 1;
-      break;
-
-    case 'u': /* user to drop privileges to */
-      username = optarg;
-      break;
-
-    case 'i': /* set banner by index */
-      banner_index = atoi(optarg);
-
-      if (banner_index >= num_banners) {
-          fprintf (stderr, "FATAL: Invalid banner index\n");
-          exit (EXIT_FAILURE);
-      }
-
-      banner = banners[banner_index].str;
-      break;
-
-    case 'b': /* specify banner string */
-      banner = optarg;
-      break;
+  if (json_logging_server)
+    sockprintf (json_sock, "%s\r\n", message);
 
     case '?': /* print usage */
     case 'h':
@@ -317,9 +215,29 @@ int main (int argc, char *argv[]) {
     }
   }
 
+  if (json_logging_server) {
+    struct sockaddr_in  s_addr;
+    json_sock = socket (AF_INET, SOCK_DGRAM, 0);
+    if (json_sock < 0) {
+      log_entry ("FATAL: socket(): %s\n", strerror (errno));
+      exit (EXIT_FAILURE);
+    }
+
+    bzero (&s_addr, sizeof(s_addr));
+    s_addr.sin_family = AF_INET;
+    s_addr.sin_addr.s_addr = inet_addr (json_server);
+    s_addr.sin_port = htons (json_port);
+
+    /* connect() UDP socket to avoid sendto() */
+    if (connect (json_sock, (struct sockaddr *)&s_addr, sizeof(s_addr)) == -1) {
+      log_entry ("FATAL: connect(): %s\n", strerror (errno));
+      exit (EXIT_FAILURE);
+    }
+  }
+
   signal (SIGCHLD, SIG_IGN);
 
-  if (daemonize == 1) {
+  if (daemonize) {
     pid = fork();
 
     if (pid < 0) {
@@ -356,7 +274,7 @@ int main (int argc, char *argv[]) {
   if (ssh_bind_listen (sshbind) < 0) {
     log_entry ("FATAL: ssh_bind_listen(): %s", ssh_get_error (sshbind));
 
-    if (daemonize == 1)
+    if (daemonize)
       printf ("FATAL: ssh_bind_listen(): %s\n", ssh_get_error (sshbind));
 
     exit (EXIT_FAILURE);
