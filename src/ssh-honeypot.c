@@ -1,7 +1,14 @@
 /* ssh-honeypot -- by Daniel Roberson (daniel(a)planethacker.net) 2016-2019
  *
  * TODO: keep fp open for log_entry; reload on HUP
+ * TODO: config files
  * TODO: hassh?
+ *       i don't see a way to do this right now. from what ive gathered,
+ *       libssh doesn't provide an easy way to look at the ssh handshake
+ *       packets and see the full list of kex methods, crypto methods,
+ *       compression, ...
+ *       Thought about modifying the library to just do hassh in there,
+ *       trying something with libpcap, or writing another tool altogether.
  * TODO: add more banners
  */
 
@@ -31,18 +38,18 @@
 
 
 /* Globals */
-char *          logfile = LOGFILE;
-char *          pidfile = PIDFILE;
-char *          rsakey = RSAKEY;
-char *          bindaddr = BINDADDR;
-bool            console_output = true;
-bool            daemonize = false;
-bool            use_syslog = false;
-bool            json_logging_file = false;
+char *          logfile             = LOGFILE;
+char *          pidfile             = PIDFILE;
+char *          rsakey              = RSAKEY;
+char *          bindaddr            = BINDADDR;
+bool            console_output      = true;
+bool            daemonize           = false;
+bool            use_syslog          = false;
+bool            json_logging_file   = false;
 bool            json_logging_server = false;
-char *          json_logfile = JSON_LOGFILE;
-char *          json_server = JSON_SERVER;
-unsigned short  json_port = JSON_PORT;
+char *          json_logfile        = JSON_LOGFILE;
+char *          json_server         = JSON_SERVER;
+unsigned short  json_port           = JSON_PORT;
 int             json_sock;
 char            hostname[MAXHOSTNAMELEN];
 
@@ -222,20 +229,68 @@ static void json_log_creds (const char *ip, const char *user, const char *pass) 
 }
 
 
-/* json_log_connection() -- log connections in JSON format
+/* json_log_kex_error() -- log connections in JSON format
  */
-static void json_log_connection (const char *ip) {
+static void json_log_kex_error (const char *ip) {
   char *        message;
   json_object   *jobj     = json_object_new_object ();
   json_object   *j_time   = json_object_new_int (time (NULL));
   json_object   *j_host   = json_object_new_string (hostname);
   json_object   *j_client = json_object_new_string (ip);
-  json_object   *j_event  = json_object_new_string ("ssh-honetpot-connection");
+  json_object   *j_event  = json_object_new_string ("ssh-honetpot-kexerror");
 
   json_object_object_add (jobj, "event", j_event);
   json_object_object_add (jobj, "time", j_time);
   json_object_object_add (jobj, "host", j_host);
   json_object_object_add (jobj, "client", j_client);
+
+  message = (char *)json_object_to_json_string (jobj);
+
+  if (json_logging_file)
+    json_log (message);
+
+  if (json_logging_server)
+    sockprintf (json_sock, "%s\r\n", message);
+
+  json_object_put (jobj);
+}
+
+
+/* json_log_session() - log information about client sessions
+ */
+static void json_log_session (const char *client_ip,
+			      const char *banner_c,
+			      const char *banner_s,
+			      const char *kex_algo,
+			      const char *cipher_in,
+			      const char *cipher_out,
+			      const char *hmac_in,
+			      const char *hmac_out) {
+  char *        message;
+  json_object  *jobj         = json_object_new_object ();
+  json_object  *j_time       = json_object_new_int (time (NULL));
+  json_object  *j_host       = json_object_new_string (hostname);
+  json_object  *j_client     = json_object_new_string (client_ip);
+  json_object  *j_event      = json_object_new_string ("ssh-honeypot-session");
+  json_object  *j_banner_c   = json_object_new_string (banner_c);
+  json_object  *j_banner_s   = json_object_new_string (banner_s);
+  json_object  *j_kex_algo   = json_object_new_string (kex_algo);
+  json_object  *j_cipher_in  = json_object_new_string (cipher_in);
+  json_object  *j_cipher_out = json_object_new_string (cipher_out);
+  json_object  *j_hmac_in    = json_object_new_string (hmac_in);
+  json_object  *j_hmac_out   = json_object_new_string (hmac_out);
+
+  json_object_object_add (jobj, "event", j_event);
+  json_object_object_add (jobj, "time", j_time);
+  json_object_object_add (jobj, "host", j_host);
+  json_object_object_add (jobj, "client", j_client);
+  json_object_object_add (jobj, "client_banner", j_banner_c);
+  json_object_object_add (jobj, "server_banner", j_banner_s);
+  json_object_object_add (jobj, "kex_algo", j_kex_algo);
+  json_object_object_add (jobj, "cipher_in", j_cipher_in);
+  json_object_object_add (jobj, "cipher_out", j_cipher_out);
+  json_object_object_add (jobj, "hmac_in", j_hmac_in);
+  json_object_object_add (jobj, "hmac_out", j_hmac_out);
 
   message = (char *)json_object_to_json_string (jobj);
 
@@ -276,19 +331,48 @@ static int handle_ssh_auth (ssh_session session) {
 
   ip = get_ssh_ip (session);
 
-  if (json_logging_file || json_logging_server)
-    json_log_connection (ip);
-
   if (ssh_handle_key_exchange (session)) {
     log_entry ("%s Error exchanging keys: %s", ip, ssh_get_error (session));
+
+    if (json_logging_file || json_logging_server)
+      json_log_kex_error (ip);
+
     return -1;
   }
+
+  char *banner_c   = (char *)ssh_get_clientbanner (session);
+  char *banner_s   = (char *)ssh_get_serverbanner (session);
+  char *kex_algo   = (char *)ssh_get_kex_algo (session);
+  char *cipher_in  = (char *)ssh_get_cipher_in (session);
+  char *cipher_out = (char *)ssh_get_cipher_out (session);
+  char *hmac_in    = (char *)ssh_get_hmac_in (session);
+  char *hmac_out   = (char *)ssh_get_hmac_out (session);
+
+  if (json_logging_file || json_logging_server)
+    json_log_session (ip,
+		      banner_c,
+		      banner_s,
+		      ssh_get_kex_algo (session),
+		      ssh_get_cipher_in (session),
+		      ssh_get_cipher_out (session),
+		      ssh_get_hmac_in (session),
+		      ssh_get_hmac_out (session));
+
+  log_entry ("Session:  %s|%s|%s|%s|%s|%s|%s",
+	     banner_c,
+	     banner_s,
+	     kex_algo,
+	     cipher_in,
+	     cipher_out,
+	     hmac_in,
+	     hmac_out);
 
   for (;;) {
     if ((message = ssh_message_get (session)) == NULL)
       break;
 
-    if (ssh_message_subtype (message) == SSH_AUTH_METHOD_PASSWORD) {
+    switch (ssh_message_subtype (message)) {
+    case SSH_AUTH_METHOD_PASSWORD:
       if (json_logging_file || json_logging_server)
 	json_log_creds (ip,
 			ssh_message_auth_user (message),
@@ -298,6 +382,11 @@ static int handle_ssh_auth (ssh_session session) {
 		 ip,
 		 ssh_message_auth_user (message),
 		 ssh_message_auth_password (message));
+      break;
+
+    default:
+      break;
+      printf("other: %d\n", ssh_message_subtype (message));
     }
 
     ssh_message_reply_default (message);
@@ -507,6 +596,7 @@ int main (int argc, char *argv[]) {
   if (ssh_bind_listen (sshbind) < 0) {
     if (daemonize)
       printf ("FATAL: ssh_bind_listen(): %s\n", ssh_get_error (sshbind));
+
     log_entry_fatal ("FATAL: ssh_bind_listen(): %s", ssh_get_error (sshbind));
   }
 
