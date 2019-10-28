@@ -45,6 +45,7 @@ char *          bindaddr            = BINDADDR;
 bool            console_output      = true;
 bool            daemonize           = false;
 bool            use_syslog          = false;
+bool            logging             = true;
 bool            json_logging_file   = false;
 bool            json_logging_server = false;
 char *          json_logfile        = JSON_LOGFILE;
@@ -83,6 +84,8 @@ static void usage (const char *progname) {
   fprintf (stderr, "\t-?/-h\t\t-- this help menu\n");
   fprintf (stderr, "\t-p <port>\t-- listen port\n");
   fprintf (stderr, "\t-a <address>\t-- IP address to bind to\n");
+  fprintf (stderr, "\t-L\t\t-- toggle logging to a file. Default: %s\n",
+           logging ? "on" : "off");
   fprintf (stderr, "\t-l <file>\t-- log file\n");
   fprintf (stderr, "\t-s\t\t-- toggle syslog usage. Default: %s\n",
 	   use_syslog ? "on" : "off");
@@ -132,8 +135,7 @@ static int sockprintf (int s, const char *fmt, ...) {
 /* log_entry() -- adds timestamped log entry
  *             -- displays output to stdout if console_output is true
  */
-static int log_entry (const char *fmt, ...) {
-  int		n;
+static void log_entry (const char *fmt, ...) {
   FILE *	fp;
   time_t	t;
   va_list	va;
@@ -144,27 +146,27 @@ static int log_entry (const char *fmt, ...) {
   time (&t);
   timestr = strtok (ctime (&t), "\n"); // banish newline character to the land
                                        // of wind and ghosts
-  if ((fp = fopen (logfile, "a+")) == NULL) {
-    fprintf (stderr, "Unable to open logfile %s: %s\n",
-	     logfile,
-	     strerror (errno));
-    return 1;
-  }
 
   va_start (va, fmt);
   vsnprintf (buf, sizeof(buf), fmt, va);
   va_end (va);
 
+  if (logging) {
+    if ((fp = fopen (logfile, "a+")) == NULL) {
+      fprintf (stderr, "Unable to open logfile %s: %s\n",
+	       logfile,
+	       strerror (errno));
+    } else {
+      fprintf (fp, "[%s] %s\n", timestr, buf);
+      fclose (fp);
+    }
+  }
+
   if (use_syslog)
     syslog (LOG_INFO | LOG_AUTHPRIV, "%s", buf);
 
-  n = fprintf (fp, "[%s] %s\n", timestr, buf);
-
   if (console_output)
     printf ("[%s] %s\n", timestr, buf);
-
-  fclose (fp);
-  return n;
 }
 
 
@@ -463,7 +465,7 @@ int main (int argc, char *argv[]) {
   ssh_bind		sshbind;
 
 
-  while ((opt = getopt (argc, argv, "h?p:dl:b:i:r:f:su:j:J:P:")) != -1) {
+  while ((opt = getopt (argc, argv, "h?p:dLl:b:i:r:f:su:j:J:P:")) != -1) {
     switch (opt) {
     case 'p': /* Listen port */
       port = atoi(optarg);
@@ -472,6 +474,10 @@ int main (int argc, char *argv[]) {
     case 'd': /* Daemonize */
       daemonize = true;
       console_output = false;
+      break;
+
+    case 'L': /* Toggle logging to a file */
+      logging = logging ? false : true;
       break;
 
     case 'l': /* Log file path */
