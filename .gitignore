@@ -1,2 +1,3 @@
 # Ignore RSA keys and log files
 ssh-honeypot.*
+!ssh-honeypot.service
