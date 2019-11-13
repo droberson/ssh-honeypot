@@ -18,7 +18,7 @@ install-etc:
 	install -m 644 ssh-honeypot.service /etc/ssh-honeypot/
 	ln -sf /etc/ssh-honeypot/ssh-honeypot.service /etc/systemd/system/
 	@echo
-	@echo "You can enable ssh-honeypot at startup with: systemctl enable --now ssh-daemon"
+	@echo "You can enable ssh-honeypot at startup with: systemctl enable --now ssh-honeypot"
 
 $(RSA):
 	ssh-keygen -t rsa -f $(RSA) -N ''
