@@ -73,3 +73,12 @@ Set banner by index
 
     $ bin/ssh-honeypot -i <banner index>
 
+## Systemd integration
+
+On Linux you can install ssh-honeypot as a Systemd service so that it automatically runs at system startup:
+
+    $ make install
+    $ systemctl enable --now ssh-honeypot
+
+Before installing, check `ssh-honeypot.service` and modify it to run with the options you want.
+
