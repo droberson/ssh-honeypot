@@ -84,6 +84,8 @@ static void usage (const char *progname) {
   fprintf (stderr, "\t-?/-h\t\t-- this help menu\n");
   fprintf (stderr, "\t-p <port>\t-- listen port\n");
   fprintf (stderr, "\t-a <address>\t-- IP address to bind to\n");
+  fprintf (stderr, "\t-d\t\t-- Daemonize process\n");
+  fprintf (stderr, "\t-f\t\t-- PID file\n");
   fprintf (stderr, "\t-L\t\t-- toggle logging to a file. Default: %s\n",
            logging ? "on" : "off");
   fprintf (stderr, "\t-l <file>\t-- log file\n");

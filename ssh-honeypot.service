@@ -1,0 +1,11 @@
+[Unit]
+Description=Fake sshd that logs ip addresses, usernames, and passwords.
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=forking
+ExecStart=/usr/local/bin/ssh-honeypot -p 22 -r /etc/ssh-honeypot/ssh-honeypot.rsa -u nobody -l /var/log/ssh-honeypot.log -f /var/run/ssh-honeypot.pid -d
+
+[Install]
+WantedBy=multi-user.target
