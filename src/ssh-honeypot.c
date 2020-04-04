@@ -51,6 +51,7 @@ bool            json_logging_server = false;
 char *          json_logfile        = JSON_LOGFILE;
 char *          json_server         = JSON_SERVER;
 unsigned short  json_port           = JSON_PORT;
+bool            verbose             = false;
 int             json_sock;
 char            hostname[MAXHOSTNAMELEN];
 
@@ -100,6 +101,7 @@ static void usage (const char *progname) {
   fprintf (stderr, "\t-j <file>\t-- path to JSON logfile\n");
   fprintf (stderr, "\t-J <address>\t-- server to send JSON logs\n");
   fprintf (stderr, "\t-P <port>\t-- port to send JSON logs\n");
+  fprintf (stderr, "\t-v\t-- verbose log output\n");
 
   exit (EXIT_FAILURE);
 }
@@ -336,7 +338,8 @@ static int handle_ssh_auth (ssh_session session) {
   ip = get_ssh_ip (session);
 
   if (ssh_handle_key_exchange (session)) {
-    log_entry ("%s Error exchanging keys: %s", ip, ssh_get_error (session));
+    if (verbose)
+      log_entry ("%s Error exchanging keys: %s", ip, ssh_get_error (session));
 
     if (json_logging_file || json_logging_server)
       json_log_kex_error (ip);
@@ -362,14 +365,15 @@ static int handle_ssh_auth (ssh_session session) {
 		      ssh_get_hmac_in (session),
 		      ssh_get_hmac_out (session));
 
-  log_entry ("Session:  %s|%s|%s|%s|%s|%s|%s",
-	     banner_c,
-	     banner_s,
-	     kex_algo,
-	     cipher_in,
-	     cipher_out,
-	     hmac_in,
-	     hmac_out);
+  if (verbose)
+    log_entry ("Session:  %s|%s|%s|%s|%s|%s|%s",
+  	     banner_c,
+  	     banner_s,
+  	     kex_algo,
+  	     cipher_in,
+  	     cipher_out,
+  	     hmac_in,
+  	     hmac_out);
 
   for (;;) {
     if ((message = ssh_message_get (session)) == NULL)
@@ -541,6 +545,10 @@ int main (int argc, char *argv[]) {
         pr_banners();
         return EXIT_FAILURE;
       }
+
+    case 'v': /* verbose output */
+      verbose = true;
+      break;
 
     default:
       usage (argv[0]);
