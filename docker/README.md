@@ -11,7 +11,7 @@ docker-compose build
 To run: 
 
 ```
-docker-compose up
+docker-compose -p ssh-honeypot up
 ```
 
 
