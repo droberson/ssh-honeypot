@@ -28,9 +28,9 @@ Specify MakefileOSX with make:
 
 
 
-### Docker
+### Docker (experimental)
 
-Please take a look at our Docker documentation. 
+Please take a look at our [Docker documentation](docker/README.md). 
 
 
 
