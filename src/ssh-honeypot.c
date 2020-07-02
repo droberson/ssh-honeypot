@@ -51,6 +51,7 @@ bool            json_logging_server = false;
 char *          json_logfile        = JSON_LOGFILE;
 char *          json_server         = JSON_SERVER;
 unsigned short  json_port           = JSON_PORT;
+int             connection_timeout  = 180;
 bool            verbose             = false;
 int             json_sock;
 char            hostname[MAXHOSTNAMELEN];
@@ -101,6 +102,7 @@ static void usage (const char *progname) {
   fprintf (stderr, "\t-j <file>\t-- path to JSON logfile\n");
   fprintf (stderr, "\t-J <address>\t-- server to send JSON logs\n");
   fprintf (stderr, "\t-P <port>\t-- port to send JSON logs\n");
+  fprintf (stderr, "\t-t <seconds>\t-- connection timeout (default:180, 0 to disable)\n");
   fprintf (stderr, "\t-v\t-- verbose log output\n");
 
   exit (EXIT_FAILURE);
@@ -462,7 +464,7 @@ void drop_privileges (char *username) {
 /* main() -- main entry point of program
  */
 int main (int argc, char *argv[]) {
-  pid_t			pid, child;
+  pid_t			pid, child, watchdog;
   int			opt;
   unsigned short	port = PORT, banner_index = 1;
   const char *		banner = banners[1].str;
@@ -471,7 +473,7 @@ int main (int argc, char *argv[]) {
   ssh_bind		sshbind;
 
 
-  while ((opt = getopt (argc, argv, "h?p:dLl:a:b:i:r:f:su:j:J:P:")) != -1) {
+  while ((opt = getopt (argc, argv, "h?p:dLl:a:b:i:r:f:su:j:J:P:t:v")) != -1) {
     switch (opt) {
     case 'p': /* Listen port */
       port = atoi(optarg);
@@ -545,6 +547,10 @@ int main (int argc, char *argv[]) {
         pr_banners();
         return EXIT_FAILURE;
       }
+
+    case 't': /* connection timeout */
+      connection_timeout = atoi(optarg);
+      break;
 
     case 'v': /* verbose output */
       verbose = true;
@@ -624,13 +630,41 @@ int main (int argc, char *argv[]) {
     if (ssh_bind_accept (sshbind, session) == SSH_ERROR)
       log_entry_fatal ("FATAL: ssh_bind_accept(): %s", ssh_get_error (sshbind));
 
-    child = fork();
+    watchdog = fork();
 
-    if (child < 0)
+    if (watchdog < 0)
       log_entry_fatal ("FATAL: fork(): %s", strerror (errno));
 
-    if (child == 0)
-      exit (handle_ssh_auth (session));
+    if (watchdog == 0) {
+      time_t start_time;
+      time(&start_time);
+
+      child = fork();
+
+      if (child == 0) {
+        exit (handle_ssh_auth (session));
+      } else {
+        // check if child is still running
+        while (kill(child, 0) == 0) {
+          time_t now;
+          time(&now);
+
+          if (connection_timeout == 0)
+            exit(0);
+
+          // handle connection timeout
+          if (now - start_time > connection_timeout) {
+            kill(child, 9);
+
+            exit(1);
+          }
+
+          sleep(1);
+        }
+
+        exit(0);
+      }
+    }
   }
 
   return EXIT_SUCCESS;
