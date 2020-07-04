@@ -1,0 +1,28 @@
+#!/usr/bin/env sh
+set -e
+
+# Initial arguments that ssh-honeypot will be started with
+# Intentionally added one by one for more clarity
+P_INIT_ARGS="-r /home/honeycomb/rsa/sshd-key.rsa"
+P_INIT_ARGS="${P_INIT_ARGS} -p 2022"
+P_INIT_ARGS="${P_INIT_ARGS} -j /home/honeycomb/log/honeypot.json"
+
+# Show banner by either string or index
+if [ -n "${SSH_BANNER}" ]; then
+  P_INIT_ARGS="${P_INIT_ARGS} -b '${SSH_BANNER}'"
+elif [ -n "${SSH_BANNER_INDEX}" ]; then
+  P_INIT_ARGS="${P_INIT_ARGS} -i '${SSH_BANNER_INDEX}'"
+fi
+
+# Should we send log to JSON log server
+if [ -n "${SSH_JSON_LOG_SERVER}" ]; then
+  P_INIT_ARGS="${P_INIT_ARGS} -J '${SSH_JSON_LOG_SERVER}'"
+
+  # JSON server port
+  if [ -n "${SSH_JSON_LOG_SERVER_PORT}" ]; then
+    P_INIT_ARGS="${P_INIT_ARGS} -P '${SSH_JSON_LOG_SERVER_PORT}'"
+  fi
+
+fi
+
+exec /bin/ssh-honeypot ${P_INIT_ARGS} -u honeycomb

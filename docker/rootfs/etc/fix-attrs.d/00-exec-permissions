@@ -1,0 +1,3 @@
+/bin/ssh-honeypot true root 0775 0775
+/bin/ssh-honeypot-wrapper true root 0775 0775
+/etc/services.d/sshd/run true root 0775 0775

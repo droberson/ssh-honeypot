@@ -1,0 +1,11 @@
+#!/usr/bin/env sh
+set -e
+
+RSA_KEY="/home/honeycomb/rsa/sshd-key.rsa"
+
+if [ -f "${RSA_KEY}" ]; then
+  exit 0
+fi
+
+ssh-keygen -t rsa -f "${RSA_KEY}" -q -N ""
+chown honeycomb:honeycomb "${RSA_KEY}"
