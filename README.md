@@ -18,9 +18,9 @@ _NOTE: Haven't tested json logging on OSX_
 
 Make sure that xcode is up to date.
 
-Install libssh
+Install libssh and json-c
 
-    $ brew install libssh
+    $ brew install libssh json-c
 
 Specify MakefileOSX with make:
 
@@ -30,7 +30,7 @@ Specify MakefileOSX with make:
 
 ### Docker (experimental)
 
-Please take a look at our [Docker documentation](docker/README.md). 
+Please take a look at our [Docker documentation](docker/README.md).
 
 
 
