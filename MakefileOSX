@@ -1,7 +1,7 @@
 CC=clang
 CFLAGS=-DLIBSSH_STATIC
-INC=-I/usr/local/opt/libssh/include
-LIBS=-L/usr/local/opt/libssh/lib -lssh
+INC=-I/usr/local/opt/libssh/include -I/usr/local/opt/json-c/include
+LIBS=-L/usr/local/opt/libssh/lib -lssh -L/usr/local/opt/json-c/lib -ljson-c
 
 ssh-honeypot:
 	$(CC) $(CFLAGS) -o bin/ssh-honeypot src/ssh-honeypot.c $(INC) $(LIBS)

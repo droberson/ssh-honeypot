@@ -545,6 +545,8 @@ int main (int argc, char *argv[]) {
         pr_banners();
         return EXIT_FAILURE;
       }
+      usage (argv[0]);
+      return EXIT_SUCCESS;
 
     case 'v': /* verbose output */
       verbose = true;
