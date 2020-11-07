@@ -315,13 +315,16 @@ static void json_log_session (const char *client_ip,
 static char *get_ssh_ip (ssh_session session) {
   static char			ip[INET6_ADDRSTRLEN];
   struct sockaddr_storage	tmp;
-  struct sockaddr_in *		s;
+  struct in_addr		*inaddr;
+  struct in6_addr		*in6addr;
   socklen_t			address_len = sizeof(tmp);
 
 
   getpeername (ssh_get_fd (session), (struct sockaddr *)&tmp, &address_len);
-  s = (struct sockaddr_in *)&tmp;
-  inet_ntop (AF_INET, &s->sin_addr, ip, sizeof(ip));
+  inaddr = &((struct sockaddr_in *)&tmp)->sin_addr;
+  in6addr = &((struct sockaddr_in6 *)&tmp)->sin6_addr;
+  inet_ntop (tmp.ss_family, tmp.ss_family==AF_INET?(void*)inaddr:(void*)in6addr,
+	     ip, sizeof(ip));
 
   return ip;
 }
