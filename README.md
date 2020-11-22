@@ -77,6 +77,10 @@ Set banner string
 
     $ bin/ssh-honeypot -b "my banner string"
 
+Set banner to the entire bee movie script
+
+    $ bin/ssh-honeypot -b bee-movie
+
 Set banner by index
 
     $ bin/ssh-honeypot -i <banner index>
