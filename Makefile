@@ -1,5 +1,6 @@
-CC=clang
-CFLAGS=-Wall -static-libgcc
+
+#CFLAGS=-Wall -static-libgcc
+CFLAGS=-Wall
 LIBS=-lssh -ljson-c
 
 RSA=/etc/ssh-honeypot/ssh-honeypot.rsa
