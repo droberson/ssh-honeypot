@@ -76,7 +76,7 @@ const size_t num_banners = sizeof banners / sizeof *banners;
 /* usage() -- prints out usage instructions and exits the program
  */
 static void usage (const char *progname) {
-  fprintf (stderr, "ssh-honeypot %s by %s\n\n", VERSION, AUTHOR);
+  fprintf (stderr, "ssh-honeypot %s\n\n", VERSION);
 
   fprintf (stderr, "usage: %s "
 	   "[-?h -p <port> -a <address> -b <index> -l <file> -r <file> "
@@ -593,16 +593,14 @@ int main (int argc, char *argv[]) {
       exit (EXIT_SUCCESS);
     }
 
-    printf ("ssh-honeypot %s by %s started on port %d. PID %d\n",
+    printf ("ssh-honeypot %s started on port %d. PID %d\n",
 	    VERSION,
-	    AUTHOR,
 	    port,
 	    getpid());
   }
 
-  log_entry ("ssh-honeypot %s by %s started on port %d. PID %d",
+  log_entry ("ssh-honeypot %s started on port %d. PID %d",
 	     VERSION,
-	     AUTHOR,
 	     port,
 	     getpid());
 
