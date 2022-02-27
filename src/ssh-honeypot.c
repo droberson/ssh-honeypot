@@ -606,7 +606,11 @@ int main (int argc, char *argv[]) {
 	     port,
 	     getpid());
 
+  // https://github.com/droberson/ssh-honeypot/issues/21
   session = ssh_new ();
+  long timeout = 5;
+  ssh_options_set(session, SSH_OPTIONS_TIMEOUT, (void *)&timeout);
+
   sshbind = ssh_bind_new ();
 
   ssh_bind_options_set (sshbind, SSH_BIND_OPTIONS_BINDADDR, bindaddr);
