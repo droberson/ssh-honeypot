@@ -10,7 +10,6 @@
  *       Thought about modifying the library to just do hassh in there,
  *       trying something with libpcap, or writing another tool altogether.
  * TODO: add more banners
- * TODO: fix whitespace
  * TODO: log keys.
  */
 
@@ -40,18 +39,18 @@
 
 
 /* Globals */
-char *          logfile             = LOGFILE;
-char *          pidfile             = PIDFILE;
-char *          rsakey              = RSAKEY;
-char *          bindaddr            = BINDADDR;
+char           *logfile             = LOGFILE;
+char           *pidfile             = PIDFILE;
+char           *rsakey              = RSAKEY;
+char           *bindaddr            = BINDADDR;
 bool            console_output      = true;
 bool            daemonize           = false;
 bool            use_syslog          = false;
 bool            logging             = true;
 bool            json_logging_file   = false;
 bool            json_logging_server = false;
-char *          json_logfile        = JSON_LOGFILE;
-char *          json_server         = JSON_SERVER;
+char           *json_logfile        = JSON_LOGFILE;
+char           *json_server         = JSON_SERVER;
 unsigned short  json_port           = JSON_PORT;
 bool            verbose             = false;
 int             json_sock;
@@ -71,6 +70,8 @@ static struct banner_info_s {
 	{"OpenSSH_6.7p1 Debian-5+deb8u3",   "Debian 8.6"},
 	{"OpenSSH_7.5",                     "pfSense 2.4.4-RELEASE-p3"},
 	{"dropbear_2014.63",                "dropbear 2014.63"},
+	{"OpenSSH_6.7p1 Raspbian-5+deb8u4", "Rapberry Pi"},
+	{"ROSSSH",                          "MikroTik"},
 };
 
 const size_t num_banners = sizeof(banners) / sizeof(*banners);
@@ -80,7 +81,6 @@ const size_t num_banners = sizeof(banners) / sizeof(*banners);
  */
 static void usage(const char *progname) {
 	fprintf(stderr, "ssh-honeypot %s\n\n", VERSION);
-	//TODO: -r is required.
 	//TODO check make sure all of this actually jives with reality.
 	fprintf(stderr, "usage: %s "
 			"[-?h -p <port> -a <address> -b <index> -l <file> -r <file> "
@@ -89,7 +89,7 @@ static void usage(const char *progname) {
 	fprintf(stderr, "\t-?/-h\t\t-- this help menu\n");
 	fprintf(stderr, "\t-p <port>\t-- listen port\n");
 	fprintf(stderr, "\t-a <address>\t-- IP address to bind to\n");
-	fprintf(stderr, "\t-d\t\t-- Daemonize process\n");
+	fprintf(stderr, "\t-d\t\t-- daemonize process\n");
 	fprintf(stderr, "\t-f\t\t-- PID file\n");
 	fprintf(stderr, "\t-L\t\t-- toggle logging to a file. Default: %s\n",
 			logging ? "on" : "off");
@@ -107,7 +107,7 @@ static void usage(const char *progname) {
 	fprintf(stderr, "\t-j <file>\t-- path to JSON logfile\n");
 	fprintf(stderr, "\t-J <address>\t-- server to send JSON logs\n");
 	fprintf(stderr, "\t-P <port>\t-- port to send JSON logs\n");
-	fprintf(stderr, "\t-v\t-- verbose log output\n");
+	fprintf(stderr, "\t-v\t\t-- verbose log output\n");
 
 	exit(EXIT_FAILURE);
 }
@@ -641,7 +641,7 @@ int main(int argc, char *argv[]) {
 	ssh_bind_options_set(sshbind, SSH_BIND_OPTIONS_RSAKEY, rsakey);
 
 	if (ssh_bind_listen(sshbind) < 0) {
-		if (daemonize)
+		if (daemonize) // TODO: show meaningful error if key isn't supplied
 			printf("FATAL: ssh_bind_listen(): %s\n", ssh_get_error(sshbind));
 
 		log_entry_fatal("FATAL: ssh_bind_listen(): %s", ssh_get_error(sshbind));
