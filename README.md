@@ -40,8 +40,9 @@ bin/ssh-honeypot -r ./ssh-honeypot.rsa
 
 ### OSX (experimental/unsupported)
 
-_NOTE: Haven't tested json logging on OSX. This is officially
-unsupported as I do not own any Macs to test or develop with._
+_WARNING: I haven't tested JSON logging, HASSH, or anything really on
+OSX. MacOS is officially unsupported as I do not own any Macs to test
+this software with._
 
 Make sure that xcode is up to date.
 
