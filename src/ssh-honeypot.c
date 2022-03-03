@@ -539,7 +539,6 @@ static int handle_ssh_auth(ssh_session session) {
 				  pcap_file, errbuf);
 		ssh_pcap_file_free(pcap);
 	} else {
-		printf("DEBUG: creating %s\n", pcap_file);
 		ssh_set_pcap_file(session, pcap);
 	}
 
@@ -618,6 +617,8 @@ static int handle_ssh_auth(ssh_session session) {
 	ssh_pcap_file_free(pcap);
 
 	/* Calculate HASSH */
+	// TODO this appears to have been failing because the pcap
+	//      wasn't being flushed before attempting to open/read the file.
 	pd = pcap_open_offline(pcap_file, errbuf);
 	if (pd == NULL) {
 		log_entry("ERROR: Unable to open pcap file %s: %s",
