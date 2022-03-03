@@ -556,8 +556,8 @@ static int handle_ssh_auth(ssh_session session) {
 	/* Create PID file. Necessary to calculate HASSHes. */
 	pd = pcap_open_offline(pcap_file, errbuf);
 	if (pd == NULL) {
-		log_entry("ERROR: Unable to open ssh pcap file %s: %s\n",
-				  pcap_file, errbuf);
+		log_entry("ERROR: Unable to openpcap file %s: %s",
+				  pcap_file, strerror(errno));
 		return 0;
 	} else {
 		pcap_loop(pd, 0, parse_hassh, NULL);
