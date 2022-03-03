@@ -532,12 +532,14 @@ static int handle_ssh_auth(ssh_session session) {
 
 	snprintf(pcap_file, sizeof(pcap_file), "/tmp/ssh-honeypot-%d.pcap", getpid());
 
+	/* Create pcap file. Necessary to calculate HASSHes. */
 	pcap = ssh_pcap_file_new();
 	if (ssh_pcap_file_open(pcap, pcap_file) == SSH_ERROR) {
 		log_entry("ERROR: Couldnt open pcap file %s: %s\n",
 				  pcap_file, errbuf);
 		ssh_pcap_file_free(pcap);
 	} else {
+		printf("DEBUG: creating %s\n", pcap_file);
 		ssh_set_pcap_file(session, pcap);
 	}
 
@@ -553,18 +555,7 @@ static int handle_ssh_auth(ssh_session session) {
 		return -1;
 	}
 
-	/* Create pcap file. Necessary to calculate HASSHes. */
-	pd = pcap_open_offline(pcap_file, errbuf);
-	if (pd == NULL) {
-		log_entry("ERROR: Unable to open pcap file %s: %s",
-				  pcap_file, errbuf);
-		//return 0;
-	} else {
-		pcap_loop(pd, 0, parse_hassh, NULL);
-	}
-
 	// TODO log connections to ssh-honeypot.log/stdout?
-
 
 	char *banner_c   = (char *)ssh_get_clientbanner(session);
 	char *banner_s   = (char *)ssh_get_serverbanner(session);
@@ -622,6 +613,16 @@ static int handle_ssh_auth(ssh_session session) {
 	}
 
 	// TODO log end of session? elapsed time, ...
+
+	pd = pcap_open_offline(pcap_file, errbuf);
+	if (pd == NULL) {
+		log_entry("ERROR: Unable to open pcap file %s: %s",
+				  pcap_file, errbuf);
+		//return 0;
+	} else {
+		pcap_loop(pd, 0, parse_hassh, NULL);
+	}
+
 
 	/* Remove pcap file when you're done with it. */
 	ssh_pcap_file_free(pcap);
