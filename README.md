@@ -37,11 +37,15 @@ Make sure that xcode is up to date.
 
 Install libssh and json-c
 
-    brew install libssh json-c
+```
+brew install libssh json-c
+```
 
 Specify MakefileOSX with make:
 
-    make -f MakefileOSX
+```
+make -f MakefileOSX
+```
 
 
 ### Docker (experimental)
@@ -75,7 +79,9 @@ after binding to a privileged port. You can now run this as _nobody_
 on port 22 for example instead of root, but have to initially start it
 as root:
 
-    sudo bin/ssh-honeypot -p 22 -u nobody
+```
+sudo bin/ssh-honeypot -p 22 -u nobody
+```
 
 Beware that this chowns the logfile to the user specified as well.
 
@@ -84,24 +90,31 @@ Beware that this chowns the logfile to the user specified as well.
 
 List available banners
 
-    bin/ssh-honeypot -b
+```
+bin/ssh-honeypot -b
+```
 
 Set banner string
 
-    bin/ssh-honeypot -b "my banner string"
+```
+bin/ssh-honeypot -b "my banner string"
+```
 
 Set banner by index
 
-    bin/ssh-honeypot -i <banner index>
-
+```
+bin/ssh-honeypot -i <banner index>
+```
 
 ## Systemd integration
 
 On Linux you can install ssh-honeypot as a Systemd service so that it
 automatically runs at system startup:
 
-    make install
-    systemctl enable --now ssh-honeypot
+```
+make install
+systemctl enable --now ssh-honeypot
+```
 
 Before installing, check `ssh-honeypot.service` and modify it to run
 with the options you want.
