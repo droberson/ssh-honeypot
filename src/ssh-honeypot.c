@@ -1,19 +1,16 @@
-/* ssh-honeypot -- by Daniel Roberson (daniel(a)planethacker.net) 2016-2021
+/* ssh-honeypot -- by Daniel Roberson (daniel(a)planethacker.net) 2016-2022
  *
  * TODO: keep fp open for log_entry; reload on HUP
  * TODO: config files
- * TODO: hassh?
- *       i don't see a way to do this right now. from what ive gathered,
- *       libssh doesn't provide an easy way to look at the ssh handshake
- *       packets and see the full list of kex methods, crypto methods,
- *       compression, ...
- *       Thought about modifying the library to just do hassh in there,
- *       trying something with libpcap, or writing another tool altogether.
  * TODO: add more banners
- * TODO: log keys.
+ * TODO: log public keys.
+ *       https://github.com/jeroen/libssh/blob/master/examples/ssh_server_fork.c
+ * TODO: ipv6
+ * TODO: do not print non-printable characters in usernames/passwords.
  */
 
 #include <stdio.h>
+#include <ctype.h>
 #include <stdlib.h>
 #include <stdbool.h>
 #include <stdarg.h>
@@ -35,6 +32,12 @@
 
 #include <json-c/json.h>
 
+/* needed for HASSH */
+#include <pcap.h>
+#include <netinet/ip.h>
+#include <netinet/tcp.h>
+#include <openssl/md5.h>
+
 #include "config.h"
 
 
@@ -43,6 +46,7 @@ char           *logfile             = LOGFILE;
 char           *pidfile             = PIDFILE;
 char           *rsakey              = RSAKEY;
 char           *bindaddr            = BINDADDR;
+uint16_t		port         		= PORT;
 bool            console_output      = true;
 bool            daemonize           = false;
 bool            use_syslog          = false;
@@ -55,6 +59,8 @@ unsigned short  json_port           = JSON_PORT;
 bool            verbose             = false;
 int             json_sock;
 char            hostname[MAXHOSTNAMELEN];
+
+bool			hassh_server		= false;
 
 
 /* Banners */
@@ -210,15 +216,15 @@ static void json_log(const char *msg) {
 /* json_log_creds() -- log username/password in JSON format
  */
 static void json_log_creds(const char *ip, const char *user, const char *pass) {
-	char	*message;
+	char			*message;
 
-	json_object   *jobj     = json_object_new_object();
-	json_object   *j_time   = json_object_new_int(time(NULL));
-	json_object   *j_host   = json_object_new_string(hostname);
-	json_object   *j_client = json_object_new_string(ip);
-	json_object   *j_user   = json_object_new_string(user);
-	json_object   *j_pass   = json_object_new_string(pass);
-	json_object   *j_event  = json_object_new_string("ssh-honeypot-auth");
+	json_object		*jobj     = json_object_new_object();
+	json_object		*j_time   = json_object_new_int(time(NULL));
+	json_object		*j_host   = json_object_new_string(hostname);
+	json_object		*j_client = json_object_new_string(ip);
+	json_object		*j_user   = json_object_new_string(user);
+	json_object		*j_pass   = json_object_new_string(pass);
+	json_object		*j_event  = json_object_new_string("ssh-honeypot-auth");
 
 	json_object_object_add(jobj, "event", j_event);
 	json_object_object_add(jobj, "time", j_time);
@@ -239,16 +245,53 @@ static void json_log_creds(const char *ip, const char *user, const char *pass) {
 }
 
 
+/* json_log_hassh() - log HASSHes
+ */
+static void json_log_hassh(const char *hassh,
+						   const char *ip,
+						   const char *hassh_type,
+						   const uint16_t sport,
+						   const uint16_t ttl) {
+	char			*message;
+
+	json_object		*jobj    = json_object_new_object();
+	json_object		*j_time  = json_object_new_int(time(NULL));
+	json_object		*j_hassh = json_object_new_string(hassh);
+	json_object		*j_ip    = json_object_new_string(ip);
+	json_object		*j_sport = json_object_new_int(sport);
+	json_object		*j_ttl   = json_object_new_int(ttl);
+	json_object		*j_event = json_object_new_string(hassh_type);
+
+
+	json_object_object_add(jobj, "event", j_event);
+	json_object_object_add(jobj, "time", j_time);
+	json_object_object_add(jobj, "ip", j_ip);
+	json_object_object_add(jobj, "hassh", j_hassh);
+	json_object_object_add(jobj, "sport", j_sport);
+	json_object_object_add(jobj, "ttl", j_ttl);
+
+	message = (char *)json_object_to_json_string(jobj);
+
+	if (json_logging_file)
+		json_log(message);
+
+	if (json_logging_server)
+		sockprintf(json_sock, "%s\r\n", message);
+
+	json_object_put(jobj);
+}
+
+
 /* json_log_kex_error() -- log connections in JSON format
  */
 static void json_log_kex_error(const char *ip) {
-	char	*message;
+	char			*message;
 
-	json_object   *jobj     = json_object_new_object();
-	json_object   *j_time   = json_object_new_int(time(NULL));
-	json_object   *j_host   = json_object_new_string(hostname);
-	json_object   *j_client = json_object_new_string(ip);
-	json_object   *j_event  = json_object_new_string("ssh-honetpot-kexerror");
+	json_object		*jobj     = json_object_new_object();
+	json_object		*j_time   = json_object_new_int(time(NULL));
+	json_object		*j_host   = json_object_new_string(hostname);
+	json_object		*j_client = json_object_new_string(ip);
+	json_object		*j_event  = json_object_new_string("ssh-honetpot-kexerror");
 
 	json_object_object_add(jobj, "event", j_event);
 	json_object_object_add(jobj, "time", j_time);
@@ -318,10 +361,10 @@ static void json_log_session(const char *client_ip,
 /* get_ssh_ip() -- obtains IP address via ssh_session
  */
 static char *get_ssh_ip(ssh_session session) {
-	static char				ip[INET6_ADDRSTRLEN];
-	struct sockaddr_storage	tmp;
+	static char					ip[INET6_ADDRSTRLEN];
+	struct sockaddr_storage		tmp;
 	struct in_addr				*inaddr;
-	struct in6_addr			*in6addr;
+	struct in6_addr				*in6addr;
 	socklen_t					address_len = sizeof(tmp);
 
 
@@ -336,18 +379,163 @@ static char *get_ssh_ip(ssh_session session) {
 }
 
 
+/* parse_hassh() -- parse packets, calculate HASSH
+ */
+void parse_hassh(u_char *args,
+				  const struct pcap_pkthdr *header,
+				  const u_char *packet) {
+	uint32_t		kex_len;
+	uint32_t		hka_len;
+	uint32_t		e_ctos_len;
+	uint32_t		e_stoc_len;
+	uint32_t		mac_ctos_len;
+	uint32_t		mac_stoc_len;
+	uint32_t		compression_len;
+	uint32_t		offset;
+
+	uint8_t			kex_methods[2048]	= {0};
+	uint8_t			e_ctos[2048] = {0};
+	uint8_t			mac_ctos[2048] = {0};
+	uint8_t			compression[2048] = {0};
+
+	struct ip		*ip_header;
+	struct tcphdr	*tcp_header;
+
+
+	/* populate ip and tcphdr structures. set offset to start of data. */
+	ip_header = (struct ip *)(packet);
+	tcp_header = (struct tcphdr *)(packet + sizeof(struct ip));
+	offset = sizeof(struct ip) + sizeof(struct tcphdr);
+
+	/* Look for SSH2_MSG_KEXINIT packets */
+	if (packet[offset + 5] != 0x14) // 0x14 == SSH2_MSG_KEXINIT
+		return;
+
+	/* Don't innundate logs with the server's HASSH. */
+	if ((htons(tcp_header->th_sport) == port) && hassh_server)
+		return;
+
+	/* lol */
+	offset += 25;
+	if (header->len < offset)
+		goto end;
+	kex_len = (packet[offset - 3] << 24) | (packet[offset - 2] << 16) |
+		(packet[offset - 1] << 8) | (packet[offset]);
+	if (kex_len > sizeof(kex_methods))
+		goto end;
+	memcpy(kex_methods, &packet[offset + 1], kex_len);
+	offset += 4 + kex_len;
+
+	if (header->len < offset)
+		goto end;
+	hka_len = (packet[offset - 3] << 24) | (packet[offset - 2] << 16) |
+		(packet[offset - 1] << 8) | (packet[offset]);
+	offset += 4 + hka_len;
+
+	if (header->len < offset)
+		goto end;
+	e_ctos_len = (packet[offset - 3] << 24) | (packet[offset - 2] << 16) |
+		(packet[offset - 1] << 8) | (packet[offset]);
+	if (e_ctos_len > sizeof(e_ctos))
+		goto end;
+	memcpy(e_ctos, &packet[offset + 1], e_ctos_len);
+	offset += 4 + e_ctos_len;
+
+	if (header->len < offset)
+		goto end;
+	e_stoc_len = (packet[offset - 3] << 24) | (packet[offset - 2] << 16) |
+		(packet[offset - 1] << 8) | (packet[offset]);
+	offset += 4 + e_stoc_len;
+
+	if (header->len < offset)
+		goto end;
+	mac_ctos_len = (packet[offset - 3] << 24) | (packet[offset - 2] << 16) |
+		(packet[offset - 1] << 8) | (packet[offset]);
+	if (mac_ctos_len > sizeof(mac_ctos))
+		goto end;
+	memcpy(mac_ctos, &packet[offset + 1], mac_ctos_len);
+	offset += 4 + mac_ctos_len;
+
+	if (header->len < offset)
+		goto end;
+	mac_stoc_len = (packet[offset - 3] << 24) | (packet[offset - 2] << 16) |
+		(packet[offset - 1] << 8) | (packet[offset]);
+	offset += 4 + mac_stoc_len;
+
+	if (header->len < offset)
+		goto end;
+	compression_len = (packet[offset - 3] << 24) | (packet[offset - 2] << 16) |
+		(packet[offset - 1] << 8) | (packet[offset]);
+	if (compression_len > sizeof(compression))
+		goto end;
+	memcpy(compression, &packet[offset + 1], compression_len);
+
+
+	/* calculate HASSH */
+    char hassh[8192];
+
+	snprintf(hassh, sizeof(hassh), "%s;%s;%s;%s", kex_methods, e_ctos, mac_ctos, compression);
+
+	uint8_t digest[16];
+	char hassh_digest[33];
+
+	MD5_CTX ctx;
+
+	MD5_Init(&ctx);
+	MD5_Update(&ctx, hassh, strlen(hassh));
+	MD5_Final(digest, &ctx);
+
+	snprintf(hassh_digest,
+			 sizeof(hassh_digest),
+			 "%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",
+			 digest[0],  digest[1],  digest[2],  digest[3],  digest[4],
+			 digest[5],  digest[6],  digest[7],  digest[8],  digest[9],
+			 digest[10], digest[11], digest[12], digest[13], digest[14],
+			 digest[15]);
+
+	/* Log and output */
+	log_entry("%s: %s %s sport: %d ttl: %d",
+			  htons(tcp_header->th_sport) == port ? "HASSHServer" : "HASSH",
+			  inet_ntoa(ip_header->ip_src),
+			  hassh_digest,
+			  htons(tcp_header->th_sport),
+			  ip_header->ip_ttl);
+
+	if (json_logging_file || json_logging_server)
+		json_log_hassh(hassh_digest,
+					   inet_ntoa(ip_header->ip_src),
+					   htons(tcp_header->th_sport) == port ?
+					   "hasshserver" : "hassh",
+					   htons(tcp_header->th_sport),
+					   ip_header->ip_ttl);
+
+	return;
+
+ end:
+	/* Something went wrong! Save pcap, hexdump packet. */
+
+	printf("Shouldn't get here..\n\n");
+}
+
+
 /* handle_ssh_auth() -- handles ssh authentication requests, logging
  *                   -- appropriately.
  */
 static int handle_ssh_auth(ssh_session session) {
-	ssh_message	message;
+	ssh_message		message;
 	char			*ip;
 	ssh_pcap_file	pcap;
+	char			pcap_file[PATH_MAX];
+	pcap_t			*pd;
+	char			errbuf[PCAP_ERRBUF_SIZE];
 
+
+	snprintf(pcap_file, sizeof(pcap_file), "/tmp/ssh-honeypot-%d.pcap", getpid());
 
 	pcap = ssh_pcap_file_new();
-	if (ssh_pcap_file_open(pcap, "/tmp/ssh-honeypot.pcap") == SSH_ERROR) {
-		fprintf(stderr, "Couldnt open pcap file\n");
+	if (ssh_pcap_file_open(pcap, pcap_file) == SSH_ERROR) {
+		log_entry("ERROR: Couldnt open pcap file %s: %s\n",
+				  pcap_file, errbuf);
 		ssh_pcap_file_free(pcap);
 	} else {
 		ssh_set_pcap_file(session, pcap);
@@ -364,6 +552,19 @@ static int handle_ssh_auth(ssh_session session) {
 
 		return -1;
 	}
+
+	/* Create PID file. Necessary to calculate HASSHes. */
+	pd = pcap_open_offline(pcap_file, errbuf);
+	if (pd == NULL) {
+		log_entry("ERROR: Unable to open ssh pcap file %s: %s\n",
+				  pcap_file, errbuf);
+		return 0;
+	} else {
+		pcap_loop(pd, 0, parse_hassh, NULL);
+	}
+
+	// TODO log connections to ssh-honeypot.log/stdout?
+
 
 	char *banner_c   = (char *)ssh_get_clientbanner(session);
 	char *banner_s   = (char *)ssh_get_serverbanner(session);
@@ -398,6 +599,7 @@ static int handle_ssh_auth(ssh_session session) {
 			break;
 
 		switch (ssh_message_subtype(message)) {
+			// TODO SSH_AUTH_METHOD_PUBLICKEY
 		case SSH_AUTH_METHOD_PASSWORD:
 			if (json_logging_file || json_logging_server)
 				json_log_creds(ip,
@@ -419,8 +621,11 @@ static int handle_ssh_auth(ssh_session session) {
 		ssh_message_free(message);
 	}
 
-	//printf("End of session...\n");
+	// TODO log end of session? elapsed time, ...
+
+	/* Remove pcap file when you're done with it. */
 	ssh_pcap_file_free(pcap);
+	unlink(pcap_file); // TODO error check
 
 	return 0;
 }
@@ -486,7 +691,6 @@ int main(int argc, char *argv[]) {
 	pid_t			pid;
 	pid_t			child;
 	int				opt;
-	unsigned short	port         = PORT;
 	unsigned short	banner_index = 1;
 	const char		*banner      = banners[1].str;
 	char			*username    = NULL;
@@ -603,7 +807,7 @@ int main(int argc, char *argv[]) {
 		/* connect() UDP socket to avoid sendto() */
 		if (connect(json_sock, (struct sockaddr *)&s_addr, sizeof(s_addr)) == -1)
 			log_entry_fatal("FATAL: connect(): %s\n", strerror(errno));
-  }
+	}
 
 	signal(SIGCHLD, SIG_IGN);
 
@@ -632,6 +836,7 @@ int main(int argc, char *argv[]) {
 	// https://github.com/droberson/ssh-honeypot/issues/21
 	session = ssh_new();
 	ssh_options_set(session, SSH_OPTIONS_TIMEOUT, (void *)&timeout);
+	//ssh_set_auth_methods(session, SSH_AUTH_METHOD_PASSWORD | SSH_AUTH_METHOD_PUBLICKEY);
 
 	sshbind = ssh_bind_new();
 
@@ -663,6 +868,12 @@ int main(int argc, char *argv[]) {
 
 		if (child == 0)
 			exit(handle_ssh_auth(session));
+
+		/* TODO: This may fail if the first connection to ssh-honeypot isn't
+		   initiated by an ssh client. As a result, ssh-honeypot will never
+           emit a hasshserver event.
+		 */
+		hassh_server = true;
 	}
 
 	return EXIT_SUCCESS;
