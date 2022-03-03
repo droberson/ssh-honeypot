@@ -204,7 +204,7 @@ static void json_log(const char *msg) {
 	fp = fopen(json_logfile, "a");
 
 	if (fp == NULL)
-		log_entry_fatal("FATAL: Unable to open JSON log file %s: %s\n",
+		log_entry_fatal("FATAL: Unable to open JSON log file %s: %s",
 						json_logfile,
 						strerror(errno));
 
@@ -557,8 +557,8 @@ static int handle_ssh_auth(ssh_session session) {
 	pd = pcap_open_offline(pcap_file, errbuf);
 	if (pd == NULL) {
 		log_entry("ERROR: Unable to open pcap file %s: %s",
-				  pcap_file, strerror(errno));
-		return 0;
+				  pcap_file, errbuf);
+		//return 0;
 	} else {
 		pcap_loop(pd, 0, parse_hassh, NULL);
 	}
