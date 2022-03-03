@@ -1,8 +1,18 @@
 # SSH Honeypot
 
-This program listens for incoming ssh connections and logs the ip
-address, username, and password used. This was written to gather
-rudimentary intelligence on brute force attacks.
+This unfortunately named program listens for incoming ssh connections
+and logs the IP address, username, and password used by the
+client. This is a low-interaction honeypot that does not allow malware
+or attackers to login.
+
+This was originally written to gather rudimentary intelligence on
+brute force attacks and not meant for production usage.
+
+Nowadays, I mostly use this at attack/defend CTFs paired with sshunt:
+https://github.com/droberson/sshunt
+
+I set up sshunt to forward tools such as Hydra, Metasploit, and Ncrack
+to ssh-honeypot and allow OpenSSH clients to connect to ssh normally.
 
 
 ## Quickstart
@@ -68,11 +78,8 @@ facilities appropriately. This logs to LOG_AUTHPRIV which is typically
 /var/log/auth.log. You may want to modify this to use one of the
 LOG_LOCAL facilities if you are worried about password leakage.
 
-This was implemented to aggregate the data from several hosts into a
-centralized spot.
 
-
-## Dropping privileges
+## Dropping Privileges
 
 As of version 0.0.8, you can drop root privileges of this program
 after binding to a privileged port. You can now run this as _nobody_
@@ -87,6 +94,9 @@ Beware that this chowns the logfile to the user specified as well.
 
 
 ## Changing the Banner
+
+ssh-honeypot allows you to change the server's banner to blend in with
+other hosts on your network or mimic a specific device.
 
 List available banners
 
@@ -106,7 +116,23 @@ Set banner by index
 bin/ssh-honeypot -i <banner index>
 ```
 
-## Systemd integration
+
+## JSON Logging
+
+The `-j` CLI flag specifies the path to log results in JSON
+format. This feature can make log analytics much easier because many
+languages have robust JSON support.
+
+JSON logs can be sent to a remote host. The `-J` and `-P` CLI flags
+set the host and port to send logs in JSON to, respectively. At this
+time, logs are transmitted using UDP and not encrypted.
+
+This feature can be useful when running multiple ssh-honeypot
+instances. Listeners can be created for Splunk and ElasticSearch to
+ingest these logs and make them searchable.
+
+
+## Systemd Integration
 
 On Linux you can install ssh-honeypot as a Systemd service so that it
 automatically runs at system startup:
