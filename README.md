@@ -17,7 +17,7 @@ Make sure headers/development packages are installed for:
 - libpcap
 
 
-  apt install libssh-dev libjson-c-dev libpcap-dev libssl-dev
+    apt install libssh-dev libjson-c-dev libpcap-dev libssl-dev
 
 
 Build and Run
