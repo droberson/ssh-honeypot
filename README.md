@@ -69,6 +69,10 @@ As of version 0.2.0, ssh-honeypot attempts to calculate the HASSH of
 the client software initiating sessions with ssh-honeypot. In short,
 you can tell if the client is using OpenSSH, PuTTY, SecureCRT, ...
 
+For more information about HASSH, refer to these links:
+
+- https://github.com/salesforce/hassh
+- https://engineering.salesforce.com/open-sourcing-hassh-abed3ae5044c
 
 ## Syslog facilities
 
