@@ -614,18 +614,20 @@ static int handle_ssh_auth(ssh_session session) {
 
 	// TODO log end of session? elapsed time, ...
 
+	/* Close pcap file when we're done with it. */
+	ssh_pcap_file_free(pcap);
+
+	/* Calculate HASSH */
 	pd = pcap_open_offline(pcap_file, errbuf);
 	if (pd == NULL) {
 		log_entry("ERROR: Unable to open pcap file %s: %s",
 				  pcap_file, errbuf);
-		//return 0;
+		return 0;
 	} else {
 		pcap_loop(pd, 0, parse_hassh, NULL);
 	}
 
-
-	/* Remove pcap file when you're done with it. */
-	ssh_pcap_file_free(pcap);
+	/* Remove packet capture file */
 	unlink(pcap_file); // TODO error check
 
 	return 0;
