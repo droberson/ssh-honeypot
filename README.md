@@ -16,16 +16,17 @@ Make sure headers/development packages are installed for:
 - libjson-c
 - libpcap
 
-
-    apt install libssh-dev libjson-c-dev libpcap-dev libssl-dev
-
+```
+apt install libssh-dev libjson-c-dev libpcap-dev libssl-dev
+```
 
 Build and Run
 
-    make
-    ssh-keygen -t rsa -f ./ssh-honeypot.rsa
-    bin/ssh-honeypot -r ./ssh-honeypot.rsa
-
+```
+make
+ssh-keygen -t rsa -f ./ssh-honeypot.rsa
+bin/ssh-honeypot -r ./ssh-honeypot.rsa
+```
 
 ### OSX (experimental/unsupported)
 
