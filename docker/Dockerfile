@@ -1,6 +1,6 @@
 FROM alpine:3.12 AS build
 
-RUN apk add --update alpine-sdk clang git libssh-dev openssl openssh json-c-dev libssh2-dev \
+RUN apk add --update alpine-sdk clang git libssh-dev openssl openssh json-c-dev libssh2-dev libpcap-dev \
     && git clone --depth=1 --single-branch -j "$(nproc)" https://github.com/droberson/ssh-honeypot.git /git-ssh-honeypot \
     && cd /git-ssh-honeypot \
     && make -j "$(nproc)" \
