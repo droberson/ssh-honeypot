@@ -388,9 +388,31 @@ static char *get_ssh_ip(ssh_session session) {
 }
 
 
+static void md5_digest(const char *input, char *output, size_t len) {
+	uint8_t digest[MD5_DIGEST_LENGTH] = {0};
+
+#if OPENSSL_VERSION_NUMBER >= 0x030000000
+	EVP_Digest((const unsigned char *)input, len, digest, NULL, EVP_md5(), NULL);
+#else
+	MD5_CTX ctx;
+
+	MD5_Init(&ctx);
+	MD5_Update(&ctx, input, len);
+	MD5_Final(digest, &ctx);
+#endif /* OPENSSL_VERSION_NUMBER */
+	snprintf(output,
+			 (MD5_DIGEST_LENGTH * 2) + 1,
+			 "%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",
+			 digest[0],  digest[1],  digest[2],  digest[3],  digest[4],
+			 digest[5],  digest[6],  digest[7],  digest[8],  digest[9],
+			 digest[10], digest[11], digest[12], digest[13], digest[14],
+			 digest[15]);
+}
+
+
 /* parse_hassh() -- parse packets, calculate HASSH
  */
-void parse_hassh(u_char *args,
+static void parse_hassh(u_char *args,
 				  const struct pcap_pkthdr *header,
 				  const u_char *packet) {
 	uint32_t		kex_len;
@@ -482,27 +504,10 @@ void parse_hassh(u_char *args,
 
 	/* calculate HASSH */
     char hassh[8192];
-
 	snprintf(hassh, sizeof(hassh), "%s;%s;%s;%s", kex_methods, e_ctos, mac_ctos, compression);
 
-	uint8_t digest[MD5_DIGEST_LENGTH] = {0};
 	char hassh_digest[33];
-#if OPENSSL_VERSION_NUMBER >= 0x030000000
-	EVP_Digest((const unsigned char *)hassh, strlen(hassh), digest, NULL, EVP_md5(), NULL);
-#else
-	MD5_CTX ctx;
-
-	MD5_Init(&ctx);
-	MD5_Update(&ctx, hassh, strlen(hassh));
-	MD5_Final(digest, &ctx);
-#endif /* OPENSSL_VERSION_NUMBER */
-	snprintf(hassh_digest,
-			 sizeof(hassh_digest),
-			 "%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",
-			 digest[0],  digest[1],  digest[2],  digest[3],  digest[4],
-			 digest[5],  digest[6],  digest[7],  digest[8],  digest[9],
-			 digest[10], digest[11], digest[12], digest[13], digest[14],
-			 digest[15]);
+	md5_digest(hassh, hassh_digest, sizeof(hassh_digest));
 
 	/* Log and output */
 	log_entry("%s: %s %s sport: %d ttl: %d",
