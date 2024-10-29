@@ -315,6 +315,8 @@ static void json_log_kex_error(const char *ip) {
 static void json_log_session(const char *client_ip,
 							 const char *banner_c,
 							 const char *banner_s,
+							 const uint16_t sport,
+							 const uint16_t dport,
 							 const char *kex_algo,
 							 const char *cipher_in,
 							 const char *cipher_out,
@@ -324,7 +326,9 @@ static void json_log_session(const char *client_ip,
 	json_object	*jobj         = json_object_new_object();
 	json_object	*j_time       = json_object_new_int(time(NULL));
 	json_object	*j_host       = json_object_new_string(hostname);
+	json_object *j_dport      = json_object_new_int(dport);
 	json_object	*j_client     = json_object_new_string(client_ip);
+	json_object *j_sport      = json_object_new_int(sport);
 	json_object	*j_event      = json_object_new_string("ssh-honeypot-session");
 	json_object	*j_banner_c   = json_object_new_string(banner_c);
 	json_object	*j_banner_s   = json_object_new_string(banner_s);
@@ -337,7 +341,9 @@ static void json_log_session(const char *client_ip,
 	json_object_object_add(jobj, "event", j_event);
 	json_object_object_add(jobj, "time", j_time);
 	json_object_object_add(jobj, "host", j_host);
+	json_object_object_add(jobj, "dport", j_dport);
 	json_object_object_add(jobj, "client", j_client);
+	json_object_object_add(jobj, "sport", j_sport);
 	json_object_object_add(jobj, "client_banner", j_banner_c);
 	json_object_object_add(jobj, "server_banner", j_banner_s);
 	json_object_object_add(jobj, "kex_algo", j_kex_algo);
@@ -564,10 +570,28 @@ static int handle_ssh_auth(ssh_session session) {
 	char *hmac_in    = (char *)ssh_get_hmac_in(session);
 	char *hmac_out   = (char *)ssh_get_hmac_out(session);
 
+	uint16_t sport, dport;
+	struct sockaddr_storage addr;
+	socklen_t len = sizeof(addr);
+
+	dport = port; // server's port
+
+	if (getpeername(ssh_get_fd(session), (struct sockaddr *)&addr, &len) == 0) {
+		if (addr.ss_family == AF_INET) {
+			sport = ntohs(((struct sockaddr_in*)&addr)->sin_port);
+		} else if (addr.ss_family == AF_INET6) {
+            sport = ntohs(((struct sockaddr_in6*)&addr)->sin6_port);
+        } else {
+            sport = 0; // Unknown port, handle accordingly
+        }
+    }
+
 	if (json_logging_file || json_logging_server)
 		json_log_session(ip,
 						 banner_c,
 						 banner_s,
+						 sport,
+						 dport,
 						 ssh_get_kex_algo(session),
 						 ssh_get_cipher_in(session),
 						 ssh_get_cipher_out(session),
