@@ -37,6 +37,9 @@
 #include <netinet/ip.h>
 #include <netinet/tcp.h>
 #include <openssl/md5.h>
+#if OPENSSL_VERSION_NUMBER >= 0x030000000
+#include <openssl/evp.h>
+#endif /* OPENSSL_VERSION_NUMBER */
 
 #include "config.h"
 
@@ -482,15 +485,17 @@ void parse_hassh(u_char *args,
 
 	snprintf(hassh, sizeof(hassh), "%s;%s;%s;%s", kex_methods, e_ctos, mac_ctos, compression);
 
-	uint8_t digest[16];
+	uint8_t digest[MD5_DIGEST_LENGTH] = {0};
 	char hassh_digest[33];
-
+#if OPENSSL_VERSION_NUMBER >= 0x030000000
+	EVP_Digest((const unsigned char *)hassh, strlen(hassh), digest, NULL, EVP_md5(), NULL);
+#else
 	MD5_CTX ctx;
 
 	MD5_Init(&ctx);
 	MD5_Update(&ctx, hassh, strlen(hassh));
 	MD5_Final(digest, &ctx);
-
+#endif /* OPENSSL_VERSION_NUMBER */
 	snprintf(hassh_digest,
 			 sizeof(hassh_digest),
 			 "%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",
