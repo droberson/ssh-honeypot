@@ -650,6 +650,7 @@ static int handle_ssh_auth(ssh_session session) {
 		return 0;
 	} else {
 		pcap_loop(pd, 0, parse_hassh, NULL);
+		pcap_close(pd);
 	}
 
 	/* Remove packet capture file */
@@ -894,8 +895,17 @@ int main(int argc, char *argv[]) {
 		if (child < 0)
 			log_entry_fatal("FATAL: fork(): %s", strerror(errno));
 
-		if (child == 0)
-			exit(handle_ssh_auth(session));
+		if (child == 0) {
+			handle_ssh_auth(session);
+			ssh_free(session);
+			exit(EXIT_SUCCESS);
+		} else {
+			ssh_free(session);
+			session = ssh_new();
+			if (session == NULL) {
+				log_entry_fatal("FATAL: ssh_new(): %s\n", strerror(errno));
+			}
+		}
 
 		/* TODO: This may fail if the first connection to ssh-honeypot isn't
 		   initiated by an ssh client. As a result, ssh-honeypot will never
